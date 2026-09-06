@@ -1,17 +1,16 @@
 # Steward repository setup and relocation
 
-Status: Steward branding and component/UI work implemented. The repository was moved to `Documents/projects/steward` on 2026-09-06 UTC (2026-09-05 local). Local source is committed on `main`. GitHub creation/push is blocked by automatic approval review pending explicit authorization of this source upload to the private `bharath2020/steward` repository. Remote CI has not run.
+Status: Steward branding and component/UI work implemented. The repository was moved to `Documents/projects/steward` on 2026-09-06 UTC (2026-09-05 local). Source is committed and pushed to `main` in the private [bharath2020/steward](https://github.com/bharath2020/steward) repository. The first [GitHub CI run](https://github.com/bharath2020/steward/actions/runs/34008856686) passed all three jobs on 2026-09-06 UTC (2026-09-05 local).
 
 ## Confirmed direction
 
 - Initial product version: `0.1.0`, as selected by the owner. Package metadata and the lockfile agree; the README displays the same version.
-
 - One repository with Steward CLI (`src/cli/`), Steward Server (`src/server/`), and Steward Console (`ui/`) components.
 - UI templates mean shared component markup and selectable layouts/themes. Do not enable GitHub's template-repository flag or add a starter-workflow generator on that basis.
 - Board and Review layouts; Dark, Light, and System themes.
 - Move from the trials folder to the owner's `Documents/projects/steward` directory.
 - README, icon, accurate technology/status badges, contribution instructions, and CI configuration prepared locally. The live GitHub CI badge targets `bharath2020/steward`; it reflects GitHub status rather than a static passing claim.
-- Steward is the approved display name. The prepared destination is `bharath2020/steward` with private visibility; no remote has been created.
+- Steward is the approved display name. The repository is `bharath2020/steward`, with private visibility and `main` as its default branch. GitHub template mode is disabled.
 
 ## Preserve the runtime during relocation
 
@@ -25,9 +24,9 @@ The saved Codex project entry still points to the former trial directory. The av
 
 ## Publication
 
-Automatic approval review rejected the combined repository-creation/push command because it requires explicit approval for the exact source payload and destination. No upload occurred. The prepared payload is the Git-tracked source, documentation, examples/workflows, icon, package metadata, and CI configuration; runtime data and local agent configuration are ignored. GitHub CI remains unverified until publication is approved and performed.
+The owner approved commit and push. After verifying the authenticated GitHub account owns the `bharath2020` namespace, the private repository was created and the committed source pushed. The upload contains 67 tracked source, documentation, example/workflow, icon, package, and CI files. Runtime data, dependencies, credentials, and local agent configuration are ignored. GitHub CI passed Node 22 and Node 24 typechecks/tests plus the isolated simulated recovery job at commit `aef81c2c6be1047cd1225b4e3f39ab96fb44f100`.
 
-Apply the approved Steward display name and repository/package metadata while retaining existing execution identifiers. Commit source, documentation, and UI assets; exclude runtime history, credentials, local agent configuration, and generated test output. Create the requested GitHub repository, push `main`, set its description/topics, and verify the first CI run. No license has been selected; do not add an open-source license or license badge without the owner's choice.
+The approved display name, package metadata, README icon/badges, repository description, and topics are configured. Preserve execution identifiers and keep runtime history, credentials, local configuration, and generated test output excluded from future commits. No license has been selected; do not add an open-source license or license badge without the owner's choice.
 
 Compatibility is explicit: `YAMLFLOW_*` settings, `yamlflow-<runId>` workflow IDs, the `yamlflow-agent-nodes` task queue, `yamlAgentWorkflow`/`yamlAgentWorkflowV2` workflow types, and stored schema identities retain their established spelling. Existing lowercase identifiers in future CLI proposals also remain unchanged pending a contract-specific decision.
 
