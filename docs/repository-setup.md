@@ -1,6 +1,6 @@
 # Steward repository setup and relocation
 
-Status: Steward branding and component/UI work implemented. The repository was moved to `Documents/projects/steward` on 2026-09-06 UTC (2026-09-05 local). GitHub publication and remote CI verification are underway.
+Status: Steward branding and component/UI work implemented. The repository was moved to `Documents/projects/steward` on 2026-09-06 UTC (2026-09-05 local). Local source is committed on `main`. GitHub creation/push is blocked by automatic approval review pending explicit authorization of this source upload to the private `bharath2020/steward` repository. Remote CI has not run.
 
 ## Confirmed direction
 
@@ -9,7 +9,7 @@ Status: Steward branding and component/UI work implemented. The repository was m
 - Board and Review layouts; Dark, Light, and System themes.
 - Move from the trials folder to the owner's `Documents/projects/steward` directory.
 - README, icon, accurate technology/status badges, contribution instructions, and CI configuration prepared locally. The live GitHub CI badge targets `bharath2020/steward`; it reflects GitHub status rather than a static passing claim.
-- Steward is the approved display name. Publication completion and the selected GitHub visibility must be recorded from the actual repository operation.
+- Steward is the approved display name. The prepared destination is `bharath2020/steward` with private visibility; no remote has been created.
 
 ## Preserve the runtime during relocation
 
@@ -22,6 +22,8 @@ Existing definition `sourcePath` fields are historical provenance. Do not rewrit
 The saved Codex project entry still points to the former trial directory. The available project tools cannot change a saved path, and Codex blocks computer automation of its own UI; the owner must open the new folder in Codex. Project-local configuration moved with the folder and remains excluded from Git. The new destination is outside this task's current writable root and requires the normal filesystem approval mechanism. Do not use a symlink to bypass that boundary.
 
 ## Publication
+
+Automatic approval review rejected the combined repository-creation/push command because it requires explicit approval for the exact source payload and destination. No upload occurred. The prepared payload is the Git-tracked source, documentation, examples/workflows, icon, package metadata, and CI configuration; runtime data and local agent configuration are ignored. GitHub CI remains unverified until publication is approved and performed.
 
 Apply the approved Steward display name and repository/package metadata while retaining existing execution identifiers. Commit source, documentation, and UI assets; exclude runtime history, credentials, local agent configuration, and generated test output. Create the requested GitHub repository, push `main`, set its description/topics, and verify the first CI run. No license has been selected; do not add an open-source license or license badge without the owner's choice.
 

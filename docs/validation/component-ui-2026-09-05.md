@@ -28,4 +28,13 @@ Inspected the server on a separate local port using the existing run projections
 
 ## Limits and outstanding work
 
-These checks cover the local refactor and selected recovery scenarios. They do not establish production readiness, full Temporal history replay qualification, live-provider relocation compatibility, or GitHub CI success. The existing runtime was preserved. Steward naming is approved and the project moved to `Documents/projects/steward`; all 888 runtime files (10,632,065 bytes) matched pre-move SHA-256 hashes after relocation. Repository creation/push and the first GitHub CI run remain pending.
+These checks cover the local refactor and selected recovery scenarios. They do not establish production readiness, full Temporal history replay qualification, live-provider relocation compatibility, or GitHub CI success. The existing runtime was preserved. Steward naming is approved and the project moved to `Documents/projects/steward`; all 888 runtime files (10,632,065 bytes) matched pre-move SHA-256 hashes after relocation. Repository creation/push is blocked by automatic approval review pending explicit upload authorization; GitHub CI has not run.
+
+## Verification after relocation
+
+Repeated from `Documents/projects/steward` on 2026-09-06 UTC (2026-09-05 local):
+
+- `npm run verify`: exit 0; TypeScript and all 25 tests passed.
+- `npm run verify:recovery`: exit 0 and `ok: true`. Receipt run `2026-09-06T02-40-01-234Z-5157ec` restored the deleted output/receipt with 0 provider reruns. Network run `2026-09-06T02-40-15-181Z-e067d5` exhausted 2 attempts, accepted `retry_same_session`, and reran 0 completed siblings. These simulated test runs used temporary storage that the harness cleaned up.
+- Reloaded the separate server preview at `http://127.0.0.1:4431`: title `Steward · Workflow console`, icon loaded, 18 existing run projections visible, Board/Dark and Review/Light selectable. The settled Light theme used a light selected-run background and readable graph nodes. No browser console errors. No run or human command submitted.
+- Saved Codex project path update remains manual because available tools cannot edit it and Codex blocks automation of its own UI.
