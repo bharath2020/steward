@@ -92,6 +92,13 @@ npm run start -- --workflow workflows/product-launch.yaml --input examples/produ
 
 The worker adapter uses `codex exec --json --sandbox read-only --output-schema ... --output-last-message ...`, or `codex exec resume` when a matching session checkpoint exists. Existing Codex CLI authentication is reused. Each agent is bounded to one node, cannot write to the repository, and must return the node's JSON shape. Only completed `agent_message` items from the Codex JSONL stream are persisted to `nodes/<node-id>/messages.jsonl`; reasoning, command, tool, and lifecycle events remain out of the selected-node transcript.
 
+## Multiple-choice questions from two agents
+
+[Run the question example](examples/two-agent-multiple-choice.md) to have product
+and technical agents each ask two questions with A/B/C options. Four human answer
+gates join before a decision brief. It supports simulated and real Codex runs;
+the console presents selectable choices and a custom-answer option.
+
 ## YAML contract
 
 ```yaml

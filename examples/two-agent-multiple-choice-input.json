@@ -1,0 +1,9 @@
+{
+  "brief": "Plan the first release of a lightweight task tracker. The audience, primary workflow, platform, and data storage are deliberately undecided.",
+  "constraints": [
+    "Four-week prototype window",
+    "Small delivery team",
+    "Keep the initial scope narrow",
+    "Ask the owner before choosing the audience, workflow, platform, or storage"
+  ]
+}

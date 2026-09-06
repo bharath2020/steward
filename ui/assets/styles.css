@@ -130,11 +130,20 @@ select {
 .durable-note code { color: var(--muted); font: 10px/1.4 var(--mono); }
 
 .graph-toolbar { min-height: 78px; padding: 21px 24px 15px; display: flex; justify-content: space-between; align-items: start; border-bottom: 1px solid var(--line); }
-.graph-toolbar h1 { font-size: 22px; }
+.graph-toolbar { gap: 12px; flex-wrap: wrap; }
+.graph-toolbar > div:first-child { flex: 1 1 200px; min-width: 0; }
+.graph-toolbar h1 { font-size: clamp(17px, 1.5vw, 22px); overflow-wrap: anywhere; }
+.graph-tools { display: grid; justify-items: end; gap: 8px; min-width: 0; max-width: 100%; }
+.graph-tools .definition-meta { max-width: 220px; overflow-wrap: anywhere; }
+.graph-view-controls { display: flex; gap: 4px; }
+.graph-view-controls button { min-width: 32px; min-height: 32px; padding: 5px 9px; border: 1px solid var(--line-bright); background: var(--surface); color: var(--text); font: 11px var(--mono); cursor: pointer; }
+.graph-view-controls button:hover, .graph-view-controls button:focus-visible { border-color: var(--accent); outline-color: var(--accent); }
+.graph-view-controls button:disabled { opacity: 0.4; cursor: default; }
+#graph-zoom-reset { min-width: 52px; }
 .definition-meta { display: grid; justify-items: end; gap: 6px; color: var(--muted); font-size: 12px; }
 .definition-meta code { font: 10px/1 var(--mono); color: var(--quiet); }
 .graph-shell { flex: 1; min-height: 0; overflow: auto; position: relative; background-image: radial-gradient(circle, rgba(255,255,255,0.08) 0.7px, transparent 0.8px); background-size: 18px 18px; }
-#graph { display: block; width: 100%; min-width: 1120px; min-height: 470px; height: 100%; }
+#graph { display: block; max-width: none; min-width: 0; min-height: 0; margin-right: 12px; margin-bottom: 12px; }
 .empty-state { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; color: var(--quiet); }
 .empty-state[hidden] { display: none; }
 .empty-state span { color: var(--line-bright); font: 74px/1 var(--mono); }
@@ -222,6 +231,17 @@ select {
 .human-input-panel > p { margin: 0; color: var(--text); line-height: 1.55; }
 .human-input-panel textarea { width: 100%; resize: vertical; border: 1px solid var(--line-bright); background: var(--surface); color: var(--text); padding: 9px 10px; font: 13px/1.5 var(--sans); }
 .human-input-panel textarea:focus { outline: 1px solid var(--warning); border-color: var(--warning); }
+.human-answer-fields { min-width: 0; margin: 0; padding: 0; border: 0; }
+.human-answer-fields legend { width: 100%; margin-bottom: 12px; padding: 0; color: var(--text); font: 13px/1.55 var(--sans); }
+.human-choices { display: grid; gap: 7px; }
+.human-choice { display: flex; align-items: flex-start; gap: 9px; min-height: 44px; padding: 10px; border: 1px solid var(--line-bright); background: var(--surface); cursor: pointer; color: var(--text); font: 12px/1.5 var(--sans); overflow-wrap: anywhere; }
+.human-choice:hover { border-color: var(--warning); }
+.human-choice:has(input:checked) { border-color: var(--warning); background: rgba(var(--warning-rgb), 0.1); }
+.human-choice:focus-within { outline: 2px solid var(--warning); outline-offset: 2px; }
+.human-choice input { flex: 0 0 auto; margin: 3px 0 0; accent-color: var(--warning); }
+.human-answer-fields:disabled .human-choice { cursor: default; opacity: 0.65; }
+.human-custom-answer { display: grid; gap: 6px; margin-top: 10px; font: 12px/1.5 var(--sans); }
+.human-custom-answer[hidden] { display: none; }
 .recovery-button.danger:hover { border-color: var(--danger); color: var(--danger); }
 .recovery-button:disabled { opacity: 0.45; cursor: wait; }
 

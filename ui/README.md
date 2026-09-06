@@ -13,6 +13,8 @@ Steward Console is the browser UI served by Steward Server, alongside the separa
 | `assets/themes.css` | Semantic color tokens and shared component theme rules. |
 | `assets/styles.css` | Base component styling and restrained motion. |
 | `assets/appearance.js` | Browser preferences, system-theme resolution, and keyboard policy. |
+| `assets/graph-layout.js` | Measured text wrapping, dependency layers, and graph node geometry. |
+| `assets/human-input.js` | Choice-question presentation, accessible answer controls, and answer serialization. |
 | `assets/app.js` | Shared snapshots, graph, inspector, timeline, and operator actions. |
 | `assets/icon.png` | Generated project mark, shared by the header, favicon, and README. |
 
@@ -46,3 +48,36 @@ The approved display name preserves compatibility with existing `YAMLFLOW_*` set
 ## Icon provenance
 
 The icon was generated with the built-in image generation tool for this repository on 2026-09-05. Its reusable prompt is in [icon-prompt.txt](icon-prompt.txt). It is a visual identity asset, not evidence of workflow behavior.
+
+## Human answer controls
+
+The console renders the explicit V1 example format as native radio options:
+`Question? A) First choice; B) Second choice; C) Third choice. Reply A, B, C, or your own answer.`
+It recognizes two to six consecutive labels beginning at A, separated by
+semicolons, with the matching reply instruction. Ambiguous or ordinary questions
+retain a labeled text field. Agent text is rendered with `textContent`.
+
+No option is selected automatically. **Write my own answer** reveals a required
+text field. Selecting an option does not submit it: **Submit answer** sends the
+letter or custom text through the existing string-answer API. Pending submissions
+disable the form; rejected submissions retain its draft for retry. Drafts are
+scoped to the run and request and survive inspector navigation and SSE refreshes
+in the current page, but are not saved across page reloads.
+
+This is presentation work under ADR-009 and ADR-010; the YAML language, Temporal
+history, human request records, and command payloads are unchanged. Existing
+waiting example runs gain these controls after the console is refreshed.
+
+## Graph layout
+
+Node columns size to their titles, with up to three wrapped lines and full-title
+hover/accessibility text. Long phase/group/loop labels are ellipsized to their
+available width. JOIN counts have reserved footer space. Edges, group bounds,
+and loop circuits use the same measured boxes as the nodes. Status changes update
+labels within those bounds instead of moving the graph during execution.
+
+The initial view fits available space down to 80% and never enlarges nodes beyond
+actual size. Larger graphs scroll inside the graph panel. **Fit** shows the full
+graph, **− / +** adjusts zoom, and the percentage button restores 100%. Resizing,
+zooming, and changing appearance preserve the selected node and answer drafts.
+This is presentation under ADR-009/ADR-010; it does not schedule workflow work.

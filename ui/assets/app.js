@@ -1,5 +1,6 @@
 const SVG = "http://www.w3.org/2000/svg";
 const ui = Object.fromEntries([
+  "graph-shell", "graph-fit", "graph-zoom-in", "graph-zoom-out", "graph-zoom-reset",
   "connection", "summary-completed", "summary-wave", "summary-elapsed", "mode", "pace", "run-again",
   "run-count", "run-list", "graph-title", "workflow-file", "definition-hash", "graph", "empty-state",
   "inspector-title", "inspector-status", "inspector-content", "event-count", "durable-path", "timeline", "toast",
@@ -15,9 +16,59 @@ let renderedGraphKey = null;
 let renderedTimelineRunId = null;
 let renderedTimelineEventIds = [];
 let inspectorSignature = null;
+const humanDrafts = new Map();
 const graphNodes = new Map();
 const graphEdges = [];
 const graphLoops = new Map();
+let graphGeometry = null;
+let graphZoomMode = "auto";
+let graphScale = 1;
+const graphMeasureContext = document.createElement("canvas").getContext("2d");
+
+function graphTextMeasure(className) {
+  const probe = svg("text", { class: className, visibility: "hidden" });
+  ui.graph.append(probe);
+  const style = getComputedStyle(probe);
+  const font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  const spacing = parseFloat(style.letterSpacing) || 0;
+  const uppercase = style.textTransform === "uppercase";
+  probe.remove();
+  return (value) => {
+    graphMeasureContext.font = font;
+    const source = uppercase ? String(value).toUpperCase() : String(value);
+    return graphMeasureContext.measureText(source).width + Math.max(0, [...source].length - 1) * spacing;
+  };
+}
+
+function fitGraphText(element, value, width, measure) {
+  const source = String(value ?? "");
+  element.textContent = WorkflowGraphLayout.fitText(source, width, measure);
+  if (element.textContent !== source) element.append(text(svg("title"), source));
+}
+
+function sizeGraph() {
+  if (!graphGeometry?.width || !graphGeometry?.height) return;
+  const shell = ui["graph-shell"];
+  const fit = Math.min(1, Math.max(1, shell.clientWidth - 24) / graphGeometry.width,
+    Math.max(1, shell.clientHeight - 24) / graphGeometry.height);
+  if (graphZoomMode === "fit") graphScale = fit;
+  else if (graphZoomMode === "auto") graphScale = Math.max(0.8, fit);
+  const width = graphGeometry.width * graphScale;
+  const height = graphGeometry.height * graphScale;
+  ui.graph.style.width = `${width}px`;
+  ui.graph.style.height = `${height}px`;
+  ui.graph.style.marginLeft = `${Math.max(12, (shell.clientWidth - width) / 2)}px`;
+  ui.graph.style.marginTop = `${Math.max(12, (shell.clientHeight - height) / 2)}px`;
+  text(ui["graph-zoom-reset"], `${Math.round(graphScale * 100)}%`);
+  ui["graph-zoom-in"].disabled = graphScale >= 1.6;
+  ui["graph-zoom-out"].disabled = graphScale <= 0.3;
+}
+
+function zoomGraph(change) {
+  graphZoomMode = "manual";
+  graphScale = Math.max(0.3, Math.min(1.6, Math.round((graphScale + change) * 10) / 10));
+  sizeGraph();
+}
 
 function svg(name, attributes = {}) {
   const element = document.createElementNS(SVG, name);
@@ -139,28 +190,11 @@ function renderRuns(runs = []) {
   });
 }
 
-function nodeLayers(nodes) {
-  const byId = Object.fromEntries(nodes.map((node) => [node.id, node]));
-  const memo = new Map();
-  const depth = (node) => {
-    if (memo.has(node.id)) return memo.get(node.id);
-    const value = node.needs.length ? 1 + Math.max(...node.needs.map((id) => depth(byId[id]))) : 0;
-    memo.set(node.id, value);
-    return value;
-  };
-  const layers = [];
-  nodes.forEach((node) => {
-    const index = depth(node);
-    if (!layers[index]) layers[index] = [];
-    layers[index].push(node);
-  });
-  return layers;
-}
-
 function renderGraph(definition, run) {
   if (!definition || !run) {
     if (renderedGraphKey !== null) ui.graph.replaceChildren();
     renderedGraphKey = null;
+    graphGeometry = null;
     graphNodes.clear();
     graphEdges.length = 0;
     graphLoops.clear();
@@ -179,29 +213,14 @@ function renderGraph(definition, run) {
   graphEdges.length = 0;
   graphLoops.clear();
   renderedGraphKey = graphKey;
-  const layers = nodeLayers(definition.nodes);
-  const nodeWidth = 214;
-  const nodeHeight = 92;
-  const loopSpace = 48;
-  const columnGap = 44;
-  const rowGap = 32;
-  const paddingX = 38;
-  const paddingY = 52;
-  const visualHeight = (node) => nodeHeight + (node.loop ? loopSpace : 0);
-  const layerHeights = layers.map((layer) => layer.reduce((sum, node) => sum + visualHeight(node), 0) + (layer.length - 1) * rowGap);
-  const width = Math.max(900, paddingX * 2 + layers.length * nodeWidth + (layers.length - 1) * columnGap);
-  const height = Math.max(470, paddingY * 2 + Math.max(...layerHeights));
+  const measureTitle = graphTextMeasure("node-title");
+  const measureSubtitle = graphTextMeasure("node-subtitle");
+  const measureMeta = graphTextMeasure("node-subtitle node-meta");
+  const measureGroup = graphTextMeasure("group-label");
+  const measureLoop = graphTextMeasure("loop-label");
+  graphGeometry = WorkflowGraphLayout.layoutGraph(definition.nodes, measureTitle);
+  const { width, height, boxes: positions } = graphGeometry;
   ui.graph.setAttribute("viewBox", `0 0 ${width} ${height}`);
-  const positions = {};
-  layers.forEach((layer, column) => {
-    const blockHeight = layerHeights[column];
-    const startY = (height - blockHeight) / 2;
-    let offsetY = 0;
-    layer.forEach((node, row) => {
-      positions[node.id] = { x: paddingX + column * (nodeWidth + columnGap), y: startY + offsetY };
-      offsetY += visualHeight(node) + (row < layer.length - 1 ? rowGap : 0);
-    });
-  });
 
   const defs = svg("defs");
   const marker = svg("marker", { id: "arrow", viewBox: "0 0 8 8", refX: 7, refY: 4, markerWidth: 5, markerHeight: 5, orient: "auto" });
@@ -217,21 +236,23 @@ function renderGraph(definition, run) {
     const memberPositions = members.map((node) => positions[node.id]);
     const left = Math.min(...memberPositions.map((position) => position.x)) - 13;
     const top = Math.min(...memberPositions.map((position) => position.y)) - 32;
-    const right = Math.max(...memberPositions.map((position) => position.x + nodeWidth)) + 13;
-    const bottom = Math.max(...members.map((node) => positions[node.id].y + visualHeight(node))) + 14;
+    const right = Math.max(...memberPositions.map((position) => position.x + position.width)) + 13;
+    const bottom = Math.max(...members.map((node) => positions[node.id].y + positions[node.id].visualHeight)) + 14;
     const hasLoop = members.some((node) => node.loop);
     ui.graph.append(svg("rect", { class: `group-surface ${hasLoop ? "has-loop" : ""}`, x: left, y: top, width: right - left, height: bottom - top, rx: 3 }));
-    ui.graph.append(text(svg("text", { class: "group-label", x: left + 8, y: top + 19 }), `${group.title} · max ${group.max_parallelism ?? definition.defaults.max_parallelism}`));
+    const groupLabel = svg("text", { class: "group-label", x: left + 8, y: top + 19 });
+    fitGraphText(groupLabel, `${group.title} · max ${group.max_parallelism ?? definition.defaults.max_parallelism}`, right - left - 16, measureGroup);
+    ui.graph.append(groupLabel);
   });
 
   definition.nodes.forEach((node) => {
     node.needs.forEach((dependency) => {
       const source = positions[dependency];
       const target = positions[node.id];
-      const startX = source.x + nodeWidth;
-      const startY = source.y + nodeHeight / 2;
+      const startX = source.x + source.width;
+      const startY = source.y + source.height / 2;
       const endX = target.x;
-      const endY = target.y + nodeHeight / 2;
+      const endY = target.y + target.height / 2;
       const bend = (endX - startX) * 0.48;
       const path = svg("path", {
         d: `M ${startX} ${startY} C ${startX + bend} ${startY}, ${endX - bend} ${endY}, ${endX} ${endY}`,
@@ -246,9 +267,9 @@ function renderGraph(definition, run) {
   definition.nodes.filter((node) => node.loop).forEach((node) => {
     const position = positions[node.id];
     const state = run.nodes[node.id];
-    const startX = position.x + nodeWidth - 28;
+    const startX = position.x + position.width - 28;
     const endX = position.x + 28;
-    const startY = position.y + nodeHeight;
+    const startY = position.y + position.height;
     const returnY = startY + 35;
     const circuit = svg("g", { class: `loop-circuit ${state.status}` });
     const path = svg("path", {
@@ -258,12 +279,12 @@ function renderGraph(definition, run) {
     });
     const label = text(svg("text", {
       class: "loop-label",
-      x: position.x + nodeWidth / 2,
+      x: position.x + position.width / 2,
       y: startY + 30,
       "text-anchor": "middle",
     }), loopLabel(node, state));
     circuit.append(path, label);
-    graphLoops.set(node.id, { element: circuit, label });
+    graphLoops.set(node.id, { element: circuit, label, width: position.width - 4, measure: measureLoop });
     ui.graph.append(circuit);
   });
 
@@ -278,27 +299,33 @@ function renderGraph(definition, run) {
       "aria-label": `${node.title}, ${state.status}`,
       style: `animation-delay:${Math.min(index * 22, 160)}ms`,
     });
-    nodeGroup.append(svg("rect", { class: "node-surface", width: nodeWidth, height: nodeHeight, rx: 2 }));
+    nodeGroup.append(text(svg("title"), node.title));
+    nodeGroup.append(svg("rect", { class: "node-surface", width: position.width, height: position.height, rx: 3 }));
     nodeGroup.append(svg("circle", { class: "node-status-dot", cx: 17, cy: 21, r: 4.5 }));
-    const titleNode = text(svg("text", { class: "node-title", x: 31, y: 27 }), node.title);
-    const subtitle = text(svg("text", { class: "node-subtitle", x: 17, y: 57 }), state.phase);
-    const logicalGroup = definition.groups.find((item) => item.id === node.group);
-    const meta = text(svg("text", { class: "node-subtitle node-meta", x: 17, y: 77 }), `${logicalGroup?.title ?? state.agent} · ${state.status}`);
-    if (state.durationMs) meta.textContent = `${logicalGroup?.title ?? state.agent} · ${(state.durationMs / 1000).toFixed(1)}s`;
+    const titleNode = svg("text", { class: "node-title" });
+    position.titleLines.forEach((line, index) => titleNode.append(
+      text(svg("tspan", { x: 32, y: 27 + index * 20 }), line),
+    ));
+    const subtitle = svg("text", { class: "node-subtitle", x: 16, y: position.phaseY });
+    const meta = svg("text", { class: "node-subtitle node-meta", x: 16, y: position.metaY });
     nodeGroup.append(titleNode, subtitle, meta);
-    if (node.needs.length > 1) nodeGroup.append(text(svg("text", { class: "join-mark", x: nodeWidth - 55, y: 77 }), `JOIN ${node.needs.length}`));
+    if (node.needs.length > 1) nodeGroup.append(text(svg("text", {
+      class: "join-mark", x: position.width - 16, y: position.metaY, "text-anchor": "end",
+    }), `JOIN ${node.needs.length}`));
     const select = () => {
       selectedNodeId = node.id;
       render(current);
     };
     nodeGroup.addEventListener("click", select);
     nodeGroup.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") select();
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(); }
     });
-    graphNodes.set(node.id, { element: nodeGroup, subtitle, meta, logicalGroup });
+    graphNodes.set(node.id, { element: nodeGroup, subtitle, meta, width: position.width,
+      measureSubtitle, measureMeta, metaWidth: position.width - 32 - (node.needs.length > 1 ? 68 : 0) });
     ui.graph.append(nodeGroup);
   });
   updateGraph(definition, run);
+  sizeGraph();
 }
 
 function updateGraph(definition, run) {
@@ -315,7 +342,7 @@ function updateGraph(definition, run) {
     if (!rendered) return;
     const state = run.nodes[node.id];
     rendered.element.setAttribute("class", `loop-circuit ${state.status}`);
-    text(rendered.label, loopLabel(node, state));
+    fitGraphText(rendered.label, loopLabel(node, state), rendered.width, rendered.measure);
   });
   definition.nodes.forEach((node) => {
     const rendered = graphNodes.get(node.id);
@@ -323,13 +350,10 @@ function updateGraph(definition, run) {
     const state = run.nodes[node.id];
     rendered.element.setAttribute("class", `node ${state.status} ${selectedNodeId === node.id ? "selected" : ""}`);
     rendered.element.setAttribute("aria-label", `${node.title}, ${state.status}`);
-    text(rendered.subtitle, state.phase);
-    text(
-      rendered.meta,
-      state.durationMs
-        ? `${rendered.logicalGroup?.title ?? state.agent} · ${(state.durationMs / 1000).toFixed(1)}s`
-        : `${rendered.logicalGroup?.title ?? state.agent} · ${state.status}`,
-    );
+    fitGraphText(rendered.subtitle, state.phase, rendered.width - 32, rendered.measureSubtitle);
+    const provider = node.kind === "human" ? "Human input" : state.agent === "codex" ? "Codex" : "Simulated agent";
+    const metaValue = state.durationMs ? `${provider} · ${(state.durationMs / 1000).toFixed(1)}s` : provider;
+    fitGraphText(rendered.meta, metaValue, rendered.metaWidth, rendered.measureMeta);
   });
 }
 
@@ -432,43 +456,43 @@ function recoveryPanel(recovery) {
   return container;
 }
 
-async function submitHumanInput(requestId, answer, container) {
-  const button = container.querySelector("button");
-  button.disabled = true;
+function refreshHumanPanel(runId, requestId) {
+  if (current?.run?.runId !== runId
+    || current.run.nodes[selectedNodeId]?.humanRequest?.requestId !== requestId) return;
+  inspectorSignature = null;
+  renderInspector(current);
+}
+
+async function submitHumanInput(runId, requestId, answer, draft) {
+  if (draft.status !== "idle") return;
+  draft.status = "submitting";
+  refreshHumanPanel(runId, requestId);
   try {
-    const response = await fetch(`/api/runs/${encodeURIComponent(current.run.runId)}/input`, {
+    const response = await fetch(`/api/runs/${encodeURIComponent(runId)}/input`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ requestId, answer }),
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error ?? "Answer was rejected");
+    draft.status = "accepted";
     showToast("Answer accepted and committed");
   } catch (error) {
-    button.disabled = false;
+    draft.status = "idle";
     showToast(String(error));
   }
+  refreshHumanPanel(runId, requestId);
 }
 
-function humanInputPanel(request) {
-  const form = document.createElement("form");
-  form.className = "human-input-panel";
-  const heading = text(document.createElement("strong"), "Agent question");
-  const question = text(document.createElement("p"), request.question);
-  const answer = document.createElement("textarea");
-  answer.name = "answer";
-  answer.rows = 4;
-  answer.required = true;
-  answer.placeholder = "Type your answer…";
-  const button = text(document.createElement("button"), "Submit answer");
-  button.type = "submit";
-  button.className = "recovery-button";
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    if (answer.value.trim()) submitHumanInput(request.requestId, answer.value.trim(), form);
-  });
-  form.append(heading, question, answer, button);
-  return form;
+function humanInputPanel(runId, request) {
+  const key = JSON.stringify([runId, request.requestId]);
+  let draft = humanDrafts.get(key);
+  if (!draft || draft.question !== request.question) {
+    draft = { question: request.question, choice: "", text: "", status: "idle" };
+    humanDrafts.set(key, draft);
+  }
+  return WorkflowHumanInput.createPanel(request, draft,
+    (answer) => submitHumanInput(runId, request.requestId, answer, draft));
 }
 
 function renderInspector(snapshot) {
@@ -521,7 +545,7 @@ function renderInspector(snapshot) {
       ? [section("Recovery", recoveryPanel(state.recovery))]
       : []),
     ...(state.status === "awaiting_input" && state.humanRequest
-      ? [section("Your input", humanInputPanel(state.humanRequest))]
+      ? [section("Your input", humanInputPanel(run.runId, state.humanRequest))]
       : []),
     ...(node.kind === "human" ? [] : [section("Agent message stream", agentMessageStream(messages, snapshot.agentMessages === undefined))]),
     section(node.kind === "human" ? "Human gate" : "Prompt", prompt),
@@ -650,6 +674,25 @@ window.addEventListener("appearancechange", () => {
   if (!current?.run) return;
   // Repaint SVG markers and surfaces in browsers that cache inherited theme tokens.
   // The inspector stays mounted so unsent answers and focus survive appearance changes.
+  renderedGraphKey = null;
+  renderGraph(current.definition, current.run);
+});
+
+ui["graph-fit"].addEventListener("click", () => {
+  graphZoomMode = "fit";
+  sizeGraph();
+  ui["graph-shell"].scrollTo(0, 0);
+});
+ui["graph-zoom-in"].addEventListener("click", () => zoomGraph(0.1));
+ui["graph-zoom-out"].addEventListener("click", () => zoomGraph(-0.1));
+ui["graph-zoom-reset"].addEventListener("click", () => {
+  graphZoomMode = "manual";
+  graphScale = 1;
+  sizeGraph();
+});
+new ResizeObserver(sizeGraph).observe(ui["graph-shell"]);
+document.fonts?.ready.then(() => {
+  if (!current?.run) return;
   renderedGraphKey = null;
   renderGraph(current.definition, current.run);
 });

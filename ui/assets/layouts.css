@@ -15,7 +15,6 @@
 }
 :root[data-layout="review"] .graph-panel { border-bottom: 1px solid var(--line); }
 :root[data-layout="review"] .graph-toolbar { min-height: 62px; padding-block: 12px; }
-:root[data-layout="review"] #graph { min-width: 100%; min-height: 0; height: 100%; }
 :root[data-layout="review"] .inspector { border-left: 0; border-right: 1px solid var(--line); }
 :root[data-layout="review"] .timeline-panel { display: flex; flex-direction: column; border-top: 0; }
 :root[data-layout="review"] .timeline-heading { flex-direction: row; align-items: start; gap: 24px; border-right: 0; border-bottom: 1px solid var(--line); padding: 22px 18px 16px; }
@@ -30,7 +29,8 @@
   .run-summary { gap: 12px; }
   .summary-item { display: none; }
   .appearance-controls { padding-right: 12px; }
-  :root[data-layout="board"] .workspace { grid-template-columns: 180px minmax(420px, 1fr) 320px; }
+  :root[data-layout="board"] .workspace { grid-template-columns: 160px minmax(280px, 1fr) 300px; }
+  :root[data-layout="review"] .workspace { grid-template-columns: 160px minmax(280px, 1fr) minmax(280px, 0.85fr); }
 }
 
 @media (max-width: 1000px) {
@@ -65,4 +65,11 @@
   .appearance-controls select { min-width: 80px; padding-left: 8px; padding-right: 22px; }
   .primary-button { padding-left: 10px; padding-right: 10px; gap: 8px; }
   .primary-button kbd { display: none; }
+}
+
+@media (max-width: 600px) {
+  .graph-toolbar { padding: 14px 16px; }
+  .graph-tools { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .graph-tools .definition-meta { font-size: 10px; max-width: 45%; }
+  .graph-view-controls button { min-height: 36px; }
 }

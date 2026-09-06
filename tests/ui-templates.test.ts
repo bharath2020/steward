@@ -50,6 +50,7 @@ test("dashboard composition preserves each application mount point exactly once"
   const html = await renderDashboard();
   const ids = [...html.matchAll(/\bid\s*=\s*["']([^"']+)["']/g)].map((match) => match[1]);
   const requiredIds = [
+    "graph-fit", "graph-zoom-in", "graph-zoom-out", "graph-zoom-reset",
     "connection", "summary-completed", "summary-wave", "summary-elapsed", "mode", "pace", "run-again",
     "run-count", "run-list", "graph-title", "workflow-file", "definition-hash", "graph-shell", "graph", "empty-state",
     "inspector-title", "inspector-status", "inspector-content", "timeline-title", "event-count", "durable-path",
@@ -74,6 +75,8 @@ test("dashboard composition preserves each application mount point exactly once"
 test("UI asset lookup serves only the explicit public asset allowlist", async () => {
   const knownAssets = [
     ["/app.js", /^(?:application|text)\/javascript\b/],
+    ["/graph-layout.js", /^(?:application|text)\/javascript\b/],
+    ["/human-input.js", /^(?:application|text)\/javascript\b/],
     ["/appearance.js", /^(?:application|text)\/javascript\b/],
     ["/styles.css", /^text\/css\b/],
     ["/themes.css", /^text\/css\b/],

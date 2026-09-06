@@ -1,0 +1,148 @@
+version: 1
+name: Two agents with multiple-choice questions
+description: Product and technical agents each ask two questions with three options. Four human answers join before a decision brief is produced.
+
+defaults:
+  provider: codex
+  max_parallelism: 4
+  delay_ms: 600
+  retry:
+    maximum_attempts: 2
+
+groups:
+  interviewers:
+    title: Two question agents
+    max_parallelism: 2
+  decisions:
+    title: Your four answers
+    description: Answer each question with A, B, C, or your own text.
+    max_parallelism: 4
+  brief:
+    title: Decision brief
+    max_parallelism: 1
+
+nodes:
+  product_interviewer:
+    title: Product question agent
+    group: interviewers
+    prompt: |
+      You are the product interviewer. Read the brief and constraints, then
+      generate exactly two multiple-choice questions for the product owner:
+      audience_question asks who the first release serves; priority_question
+      asks which user workflow the first release should prioritize.
+      Each output string must be a complete, self-contained question prefixed
+      with "Product agent / Audience:" or "Product agent / Priority:".
+      Include exactly three distinct choices labeled A), B), and C), each with
+      a short consequence. Separate choices with semicolons so they stay readable
+      in a plain text interface. End with "Reply A, B, C, or your own answer."
+      Make choices relevant to the brief. Do not select an answer or ask technical
+      platform/storage questions; the technical interviewer owns those.
+    inputs:
+      brief: $input.brief
+      constraints: $input.constraints
+    outputs:
+      audience_question: string
+      priority_question: string
+    demo_output:
+      audience_question: >-
+        Product agent / Audience: Who should the first task-tracker release serve?
+        A) Individuals, with a private personal workspace;
+        B) Families, with shared household tasks;
+        C) Small teams, with owners and shared project visibility.
+        Reply A, B, C, or your own answer.
+      priority_question: >-
+        Product agent / Priority: Which workflow should lead the first release?
+        A) Daily planning, focused on today's tasks;
+        B) Shared projects, focused on assignments and milestones;
+        C) Incoming requests, focused on triage and handoffs.
+        Reply A, B, C, or your own answer.
+
+  technical_interviewer:
+    title: Technical question agent
+    group: interviewers
+    prompt: |
+      You are the technical interviewer. Read the brief and constraints, then
+      generate exactly two multiple-choice questions for the product owner:
+      platform_question asks where the first release should run; storage_question
+      asks where task data should live and whether it should sync.
+      Each output string must be a complete, self-contained question prefixed
+      with "Technical agent / Platform:" or "Technical agent / Storage:".
+      Include exactly three distinct choices labeled A), B), and C), each with
+      a short consequence. Separate choices with semicolons so they stay readable
+      in a plain text interface. End with "Reply A, B, C, or your own answer."
+      Make choices relevant to the brief. Do not select an answer or ask audience
+      or product-priority questions; the product interviewer owns those.
+    inputs:
+      brief: $input.brief
+      constraints: $input.constraints
+    outputs:
+      platform_question: string
+      storage_question: string
+    demo_output:
+      platform_question: >-
+        Technical agent / Platform: Where should the first release run?
+        A) Responsive web, accessible by a browser link;
+        B) Native mobile, focused on phone interactions;
+        C) Desktop, focused on keyboard-driven work.
+        Reply A, B, C, or your own answer.
+      storage_question: >-
+        Technical agent / Storage: How should task data be stored?
+        A) Device only, without automatic sharing or sync;
+        B) Hosted cloud sync, with a managed shared backend;
+        C) Self-hosted server, with deployment and backups owned by the operator.
+        Reply A, B, C, or your own answer.
+
+  audience_answer:
+    title: Product agent - audience answer
+    kind: human
+    group: decisions
+    needs: [product_interviewer]
+    question: $nodes.product_interviewer.output.audience_question
+
+  priority_answer:
+    title: Product agent - priority answer
+    kind: human
+    group: decisions
+    needs: [product_interviewer]
+    question: $nodes.product_interviewer.output.priority_question
+
+  platform_answer:
+    title: Technical agent - platform answer
+    kind: human
+    group: decisions
+    needs: [technical_interviewer]
+    question: $nodes.technical_interviewer.output.platform_question
+
+  storage_answer:
+    title: Technical agent - storage answer
+    kind: human
+    group: decisions
+    needs: [technical_interviewer]
+    question: $nodes.technical_interviewer.output.storage_question
+
+  decision_brief:
+    title: Decision brief editor
+    group: brief
+    needs: [audience_answer, priority_answer, platform_answer, storage_answer]
+    prompt: |
+      Combine both interviewers' questions and all four operator answers into
+      a decision brief. Return a decisions object containing the original answers,
+      their meanings, a proposed first-release scope, and unresolved tradeoffs.
+      Resolve A/B/C only against the corresponding generated question, never
+      against an assumed option order. Preserve custom text answers exactly.
+      Treat the operator's choices as binding. Flag unclear answers or conflicting
+      choices (for example, shared projects with device-only storage); do not
+      silently choose alternatives or claim that unresolved decisions are settled.
+    inputs:
+      brief: $input.brief
+      constraints: $input.constraints
+      product_questions: $nodes.product_interviewer.output
+      technical_questions: $nodes.technical_interviewer.output
+      audience_answer: $nodes.audience_answer.output.answer
+      priority_answer: $nodes.priority_answer.output.answer
+      platform_answer: $nodes.platform_answer.output.answer
+      storage_answer: $nodes.storage_answer.output.answer
+    outputs:
+      decisions: object
+    # No fixed demo_output: the existing simulator echoes resolved inputs for an
+    # object output, so simulated decisions retain the actual questions/answers.
