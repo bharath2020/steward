@@ -4,6 +4,8 @@ Status: Steward branding and component/UI work implemented. The repository was m
 
 ## Confirmed direction
 
+- Initial product version: `0.1.0`, as selected by the owner. Package metadata and the lockfile agree; the README displays the same version.
+
 - One repository with Steward CLI (`src/cli/`), Steward Server (`src/server/`), and Steward Console (`ui/`) components.
 - UI templates mean shared component markup and selectable layouts/themes. Do not enable GitHub's template-repository flag or add a starter-workflow generator on that basis.
 - Board and Review layouts; Dark, Light, and System themes.

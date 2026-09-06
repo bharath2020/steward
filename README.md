@@ -8,6 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/bharath2020/steward/actions/workflows/ci.yml"><img src="https://github.com/bharath2020/steward/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-0.1.0-376524" alt="Version 0.1.0" /></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-22%2B-43853d?logo=nodedotjs&logoColor=white" alt="Node.js 22 or later" /></a>
   <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.9-3178c6?logo=typescript&logoColor=white" alt="TypeScript 5.9" /></a>
   <a href="https://temporal.io/"><img src="https://img.shields.io/badge/Temporal-durable_workflows-111827" alt="Temporal workflows" /></a>
