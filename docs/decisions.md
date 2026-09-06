@@ -159,3 +159,16 @@ Validate every catalog definition, demo-output schema, prompt file, and external
 A fresh workspace starts the question example in simulated mode. Repeated setup reconnects; named example launchers explicitly request a new run. Serialize setup and dependency installation. Record submission intent before the Temporal call and refuse an implicit retry after an uncertain response. This is not general durable start deduplication: the record is not completion evidence, and explicit `--new-run` requests may create another run. Temporal and committed outputs retain their existing authority under ADR-003/ADR-005.
 
 **Consequences.** Keep the database and all run artifacts across installation/restart. The selected example is submitted through the existing validated loader and Temporal client; a reused dashboard retains its existing Run-again configuration. One-click setup only supports the repository-local runtime/address and rejects custom runtime overrides. New simulated examples still require human answers at their declared gates. No Workflow/Activity scheduling semantics or replay contracts change. Clean-machine prerequisite installation and signed distribution remain separate release evidence; this change does not pass P2 on its own.
+
+
+**ADR-012 archive entrypoint refinement (2026-09-06).** `install.sh` provides a
+Git-free download path: fetch the GitHub source archive over HTTPS, stage it beside
+`~/Applications/Steward`, and invoke the same setup script. A download lock
+serializes installers; unrelated destinations are refused. The `.steward-install`
+marker identifies an installer-created directory, not execution evidence. Repeat
+invocations reuse it without upgrading source or touching runtime data. The
+installer forwards setup options and reconnects interactive prerequisite prompts
+to the terminal when launched through a pipe. `STEWARD_INSTALL_DIR` and
+`STEWARD_REF` allow an explicit destination and source revision. This extends the
+installation entrypoint only; runtime authority, local-only binding, credentials,
+and the reboot boundary remain unchanged.

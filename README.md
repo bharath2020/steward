@@ -50,6 +50,24 @@ For future changes, follow the vision and adopted decisions, use the technical d
 
 ## Run the demo
 
+### One-command macOS installation
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bharath2020/steward/codex/one-click-setup/install.sh | bash
+```
+
+No Git, cloning, or directory changes are required. The installer downloads the
+source archive to `~/Applications/Steward`, then installs prerequisites and opens
+the console. Rerunning it reopens the existing installation without replacing
+source or saved runs; it is not an upgrade command. The download currently follows
+the `codex/one-click-setup` branch. You can open `Setup Steward.command` or any of
+the four example launchers in that installed folder afterward.
+
+`STEWARD_INSTALL_DIR` selects a different absolute installation directory;
+`STEWARD_REF` can pin a commit. Existing unrelated directories are never overwritten.
+A force-interrupted download may leave `<installation-directory>.installing`;
+confirm no installer is running before removing that empty lock directory.
+
 ### One-click macOS setup
 
 Download or clone this repository, then double-click **[Setup Steward.command](Setup%20Steward.command)** in Finder. It installs missing Node.js 22+ and Temporal through Homebrew (installing Homebrew when needed), checks dependencies, typechecks, validates all four examples, starts the local services in the background, and opens Steward Console. Initial Homebrew installation may require your administrator password and its own installation confirmation. A downloaded file may require Finder's **Open** action under macOS security settings.

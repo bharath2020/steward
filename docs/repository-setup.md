@@ -1,6 +1,6 @@
 # Steward repository setup and relocation
 
-Status: Steward branding and component/UI work implemented. The repository was moved to `Documents/projects/steward` on 2026-09-06 UTC (2026-09-05 local). Source is committed and pushed to `main` in the private [bharath2020/steward](https://github.com/bharath2020/steward) repository. The first [GitHub CI run](https://github.com/bharath2020/steward/actions/runs/34008856686) passed all three jobs on 2026-09-06 UTC (2026-09-05 local).
+Status: Steward branding and component/UI work implemented. The repository was moved to `Documents/projects/steward` on 2026-09-06 UTC (2026-09-05 local). Source was initially committed and pushed to `main` in the private [bharath2020/steward](https://github.com/bharath2020/steward) repository. The first [GitHub CI run](https://github.com/bharath2020/steward/actions/runs/34008856686) passed all three jobs on 2026-09-06 UTC (2026-09-05 local).
 
 ## Confirmed direction
 
@@ -10,7 +10,7 @@ Status: Steward branding and component/UI work implemented. The repository was m
 - Board and Review layouts; Dark, Light, and System themes.
 - Move from the trials folder to the owner's `Documents/projects/steward` directory.
 - README, icon, accurate technology/status badges, contribution instructions, and CI configuration prepared locally. The live GitHub CI badge targets `bharath2020/steward`; it reflects GitHub status rather than a static passing claim.
-- Steward is the approved display name. The repository is `bharath2020/steward`, with private visibility and `main` as its default branch. GitHub template mode is disabled.
+- Steward is the approved display name. The repository is `bharath2020/steward`, now with public visibility and `main` as its default branch. GitHub template mode is disabled.
 
 ## Preserve the runtime during relocation
 
@@ -31,3 +31,16 @@ The approved display name, package metadata, README icon/badges, repository desc
 Compatibility is explicit: `YAMLFLOW_*` settings, `yamlflow-<runId>` workflow IDs, the `yamlflow-agent-nodes` task queue, `yamlAgentWorkflow`/`yamlAgentWorkflowV2` workflow types, and stored schema identities retain their established spelling. Existing lowercase identifiers in future CLI proposals also remain unchanged pending a contract-specific decision.
 
 Validation of the current local component/UI change is recorded in [the validation report](validation/component-ui-2026-09-05.md). Relocation verification matched all 888 runtime files (10,632,065 bytes) by relative path, byte count, and SHA-256 before and after the move. The detailed local manifest is `/private/tmp/steward-relocation-20260905.json`; it is excluded from publication.
+
+
+## Public archive installer
+
+The owner requested public visibility on 2026-09-06. Visibility was verified as
+PUBLIC after a Gitleaks scan of all nine then-existing commits reported no leaks
+and the tracked history was checked for runtime/credential artifacts. The setup
+work is published on `codex/one-click-setup`; it has not been merged to `main`.
+The isolated [macOS setup run](https://github.com/bharath2020/steward/actions/runs/34040125098)
+passed at `9f6eccde90d9cfb75bec74d586fe116b0b55c350`, including Temporal installation,
+example completion/receipt verification, and a repeat launch. That runner already
+had Node and Homebrew. The subsequent archive installer removes the checkout
+requirement; its CI job downloads the public commit archive without credentials.

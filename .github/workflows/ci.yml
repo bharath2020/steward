@@ -21,26 +21,36 @@ jobs:
       STEWARD_ISOLATED_SETUP_TEST: '1'
       HOMEBREW_NO_AUTO_UPDATE: '1'
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-        with:
-          persist-credentials: false
-      - name: Verify clean checkout and record host prerequisites
+      - name: Record isolated host prerequisites
         run: |
-          test ! -e node_modules
-          test ! -e runtime
           sw_vers
-          git rev-parse HEAD
           command -v node || true
           command -v brew || true
           if command -v temporal; then
             echo "Expected a runner without Temporal so setup exercises its installation."
             exit 1
           fi
-      - name: Install and launch from the repository command
-        run: bash scripts/setup.sh --example file --no-open
+      - name: Download and install without checkout or Git credentials
+        env:
+          STEWARD_INSTALL_DIR: ${{ runner.temp }}/Steward
+          STEWARD_REF: ${{ github.sha }}
+        run: |
+          test ! -e "$STEWARD_INSTALL_DIR"
+          curl -fsSL "https://raw.githubusercontent.com/bharath2020/steward/$GITHUB_SHA/install.sh" | bash -s -- --example file --no-open
+          test ! -e "$STEWARD_INSTALL_DIR/.git"
+          test "$(cat "$STEWARD_INSTALL_DIR/.steward-install")" = "$GITHUB_SHA"
       - name: Verify Temporal completion, committed output, and repeat setup
+        working-directory: ${{ runner.temp }}/Steward
         run: node --import tsx scripts/verify-installed-setup.cjs
+      - name: Repeat archive installer without overwriting saved data
+        env:
+          STEWARD_INSTALL_DIR: ${{ runner.temp }}/Steward
+        run: |
+          curl -fsSL "https://raw.githubusercontent.com/bharath2020/steward/$GITHUB_SHA/install.sh" | bash -s -- --no-open
+          cd "$STEWARD_INSTALL_DIR"
+          node -e 'if(require("fs").readdirSync("runtime/runs").length!==1)process.exit(1)'
       - name: Run repository verification
+        working-directory: ${{ runner.temp }}/Steward
         run: npm run verify
       - name: Upload setup evidence
         if: always()
@@ -48,10 +58,10 @@ jobs:
         with:
           name: isolated-macos-setup-${{ github.sha }}
           path: |
-            output/isolated-setup-verdict.json
-            runtime/services/*.log
-            runtime/services/setup-start.json
-            runtime/runs/
+            ${{ runner.temp }}/Steward/output/isolated-setup-verdict.json
+            ${{ runner.temp }}/Steward/runtime/services/*.log
+            ${{ runner.temp }}/Steward/runtime/services/setup-start.json
+            ${{ runner.temp }}/Steward/runtime/runs/
           if-no-files-found: warn
           retention-days: 7
 
