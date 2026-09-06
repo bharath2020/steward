@@ -1,0 +1,16 @@
+node_modules/
+runtime/
+output/
+tmp/
+dist/
+coverage/
+.agents/
+.codex/
+.claude/
+.playwright-cli/
+skills-lock.json
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log

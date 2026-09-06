@@ -1,0 +1,50 @@
+{
+  "name": "steward",
+  "version": "0.1.0",
+  "private": true,
+  "homepage": "https://github.com/bharath2020/steward#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bharath2020/steward.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bharath2020/steward/issues"
+  },
+  "keywords": [
+    "agents",
+    "workflows",
+    "temporal",
+    "yaml",
+    "codex",
+    "orchestration"
+  ],
+  "description": "Durable agent workflows with a CLI, server, and customizable console. Powered by Temporal and Codex.",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "verify": "npm run build && npm test",
+    "worker": "tsx src/worker.ts",
+    "dashboard": "tsx src/server.ts",
+    "start": "tsx src/start.ts",
+    "answer": "tsx src/answer.ts",
+    "demo": "tsx src/launcher.ts",
+    "resume": "tsx src/launcher.ts --no-start",
+    "verify:recovery": "tsx scripts/recovery-check.ts"
+  },
+  "dependencies": {
+    "@temporalio/activity": "1.23.0",
+    "@temporalio/client": "1.23.0",
+    "@temporalio/worker": "1.23.0",
+    "@temporalio/workflow": "1.23.0",
+    "ajv": "8.20.0",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "tsx": "4.23.13",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

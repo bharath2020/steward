@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en" data-layout="board" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="description" content="{{brand.description}}" />
+    <title>{{brand.name}} · {{brand.tagline}}</title>
+    <link rel="icon" type="image/png" href="/icon.png" />
+    <script src="/appearance.js"></script>
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/themes.css" />
+    <link rel="stylesheet" href="/layouts.css" />
+  </head>
+  <body>
+    {{> toolbar}}
+
+    <main class="workspace">
+    {{> runs}}
+
+    {{> graph}}
+
+    {{> inspector}}
+
+    {{> timeline}}
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="/app.js"></script>
+  </body>
+</html>

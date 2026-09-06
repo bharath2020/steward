@@ -1,0 +1,41 @@
+    <header class="topbar">
+      <div class="brand-block">
+        <img class="brand-mark" src="/icon.png" alt="" width="34" height="34" />
+        <div>
+          <strong>{{brand.name}}</strong>
+          <span>{{brand.tagline}}</span>
+        </div>
+      </div>
+      <div class="run-summary" aria-live="polite">
+        <span id="connection" class="connection"><i></i> Connecting</span>
+        <span class="summary-item"><b id="summary-completed">0 / 0</b> committed</span>
+        <span class="summary-item"><b id="summary-wave">—</b> wave</span>
+        <span class="summary-item"><b id="summary-elapsed">—</b> elapsed</span>
+      </div>
+      <div class="appearance-controls" aria-label="Appearance">
+        <label for="layout-select">Layout
+          <select id="layout-select"><option value="board">Board</option><option value="review">Review</option></select>
+        </label>
+        <label for="theme-select">Theme
+          <select id="theme-select"><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select>
+        </label>
+      </div>
+      <div class="run-controls">
+        <label>
+          <span>Runner</span>
+          <select id="mode">
+            <option value="simulated">Simulated</option>
+            <option value="codex">Real Codex</option>
+          </select>
+        </label>
+        <label>
+          <span>Pace</span>
+          <select id="pace">
+            <option value="1000">Fast</option>
+            <option value="1800" selected>Normal</option>
+            <option value="4000">Observe</option>
+          </select>
+        </label>
+        <button id="run-again" class="primary-button"><span>Run again</span><kbd>R</kbd></button>
+      </div>
+    </header>

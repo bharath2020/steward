@@ -1,0 +1,29 @@
+      <section class="graph-panel" aria-labelledby="graph-title">
+        <div class="graph-toolbar">
+          <div>
+            <span class="eyebrow">Active topology</span>
+            <h1 id="graph-title">Waiting for a run</h1>
+          </div>
+          <div class="definition-meta">
+            <span id="workflow-file">—</span>
+            <code id="definition-hash">—</code>
+          </div>
+        </div>
+        <div id="graph-shell" class="graph-shell">
+          <svg id="graph" role="img" aria-label="Workflow dependency graph"></svg>
+          <div id="empty-state" class="empty-state">
+            <span>01</span>
+            <p>The graph appears when the first durable transition is committed.</p>
+          </div>
+        </div>
+        <div class="legend" aria-label="Node status legend">
+          <span><i class="pending-dot"></i> Pending</span>
+          <span><i class="running-dot"></i> Running</span>
+          <span><i class="input-dot"></i> Waiting for you</span>
+          <span><i class="recovery-dot"></i> Recovery needed</span>
+          <span><i class="completed-dot"></i> Committed</span>
+          <span><i class="failed-dot"></i> Failed</span>
+          <span class="loop-key"><b>↻</b> Loop gate</span>
+          <span class="legend-rule">Fan-in opens after every incoming node commits.</span>
+        </div>
+      </section>

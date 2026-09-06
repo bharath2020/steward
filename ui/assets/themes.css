@@ -1,0 +1,48 @@
+/* Semantic tokens keep every component and layout on the same theme. */
+:root {
+  color-scheme: dark;
+  --accent-rgb: 198, 243, 106;
+  --warning-rgb: 243, 202, 106;
+  --dot: rgba(255, 255, 255, 0.08);
+  --group-fill: rgba(255, 255, 255, 0.012);
+  --group-line: rgba(255, 255, 255, 0.12);
+  --copy: #cdd6c8;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f6f7f2;
+  --surface: #ffffff;
+  --surface-raised: #edf1e8;
+  --line: #d9dfd2;
+  --line-bright: #acb8a5;
+  --text: #1a271c;
+  --muted: #54624f;
+  --quiet: #65735f;
+  --accent: #376524;
+  --accent-ink: #ffffff;
+  --accent-rgb: 55, 101, 36;
+  --danger: #b2342d;
+  --warning: #8a5800;
+  --warning-rgb: 138, 88, 0;
+  --dot: rgba(26, 39, 28, 0.14);
+  --group-fill: rgba(26, 39, 28, 0.018);
+  --group-line: rgba(26, 39, 28, 0.18);
+  --copy: #364a32;
+}
+
+.topbar { background: var(--bg); }
+.graph-shell { background-image: radial-gradient(circle, var(--dot) 0.7px, transparent 0.8px); }
+.group-surface { fill: var(--group-fill); stroke: var(--group-line); }
+.group-surface.has-loop { fill: rgba(var(--accent-rgb), 0.018); stroke: rgba(var(--accent-rgb), 0.28); }
+.connection.live i { box-shadow: 0 0 0 5px rgba(var(--accent-rgb), 0.08); }
+.edge.committed { stroke: rgba(var(--accent-rgb), 0.45); }
+.loop-edge { stroke: rgba(var(--accent-rgb), 0.42); }
+.loop-circuit.completed .loop-edge { stroke: rgba(var(--accent-rgb), 0.72); }
+.node.completed .node-surface { stroke: rgba(var(--accent-rgb), 0.52); }
+.agent-message { border-left-color: rgba(var(--accent-rgb), 0.38); }
+.inspect-section p, .json-block, .agent-message p { color: var(--copy); }
+.recovery-panel, .human-input-panel { border-color: rgba(var(--warning-rgb), 0.45); background: rgba(var(--warning-rgb), 0.05); }
+.human-input-panel > p { color: var(--text); }
+.primary-button kbd { border-color: currentColor; }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }

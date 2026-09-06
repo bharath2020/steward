@@ -1,0 +1,206 @@
+version: 1
+name: Product launch brief
+description: Two fan-out/fan-in waves turn a rough product brief into a launch package.
+
+defaults:
+  provider: codex
+  max_parallelism: 4
+  delay_ms: 1800
+  retry:
+    maximum_attempts: 2
+
+groups:
+  foundation:
+    title: Foundation
+    description: Normalize the initial request before parallel work begins.
+    max_parallelism: 1
+  discovery:
+    title: Discovery group
+    description: Three independent specialists work from the same committed brief.
+    max_parallelism: 3
+  strategy:
+    title: Strategy loop
+    description: Refine strategy until its quality gate passes.
+    max_parallelism: 1
+  activation:
+    title: Activation group
+    description: Plan and measurement run in parallel.
+    max_parallelism: 2
+  editorial:
+    title: Editorial join
+    description: Commit the final decision only after both activation outputs arrive.
+    max_parallelism: 1
+
+nodes:
+  intake:
+    title: Brief analyst
+    group: foundation
+    prompt: Normalize the product brief into a concise problem, audience, and constraint summary.
+    inputs:
+      brief: $input.brief
+      audience: $input.audience
+      launch_window: $input.launch_window
+    outputs:
+      problem: string
+      audience: string
+      constraints: string[]
+    demo_output:
+      problem: Small teams lose decisions across chat, documents, and issue trackers.
+      audience: Product and engineering leads at 10-100 person software companies.
+      constraints:
+        - Launch in six weeks
+        - Self-serve onboarding
+        - No enterprise-only dependencies
+
+  audience_research:
+    title: Audience researcher
+    group: discovery
+    needs: [intake]
+    prompt: Find the audience's strongest jobs, objections, and language from the normalized brief.
+    inputs:
+      problem: $nodes.intake.output.problem
+      audience: $nodes.intake.output.audience
+    outputs:
+      jobs: string[]
+      objections: string[]
+      message: string
+    demo_output:
+      jobs:
+        - Keep decisions attached to delivery work
+        - Recover context without another status meeting
+      objections:
+        - Another tool to maintain
+        - Unclear source of truth
+      message: Every decision stays connected to the work it changes.
+
+  feasibility:
+    title: Feasibility reviewer
+    group: discovery
+    needs: [intake]
+    prompt: Identify delivery risks and define a credible launch scope.
+    inputs:
+      problem: $nodes.intake.output.problem
+      constraints: $nodes.intake.output.constraints
+    outputs:
+      risks: string[]
+      scope: string[]
+      confidence: number
+    demo_output:
+      risks:
+        - Import quality varies across tools
+        - Permissions can slow onboarding
+      scope:
+        - GitHub and Slack capture
+        - Searchable decision timeline
+        - Manual approval before publishing
+      confidence: 0.82
+
+  narrative:
+    title: Narrative designer
+    group: discovery
+    needs: [intake]
+    prompt: Propose a crisp product narrative and three proof points.
+    inputs:
+      problem: $nodes.intake.output.problem
+      audience: $nodes.intake.output.audience
+    outputs:
+      headline: string
+      proof_points: string[]
+    demo_output:
+      headline: Decisions that travel with the work.
+      proof_points:
+        - Capture context where teams already talk
+        - Link every decision to its implementation
+        - Replay the timeline when priorities change
+
+  synthesis:
+    title: Strategy synthesizer
+    group: strategy
+    needs: [audience_research, feasibility, narrative]
+    prompt: Reconcile audience evidence, feasibility constraints, and the narrative into one strategy. On later iterations, improve the previous strategy until the quality gate passes.
+    inputs:
+      audience: $nodes.audience_research.output
+      feasibility: $nodes.feasibility.output
+      narrative: $nodes.narrative.output
+    outputs:
+      positioning: string
+      launch_scope: string[]
+      risk_response: string[]
+      quality_score: number
+    loop:
+      max_iterations: 3
+      carry_as: previous_strategy
+      on_exhaustion: fail
+      until:
+        path: quality_score
+        operator: greater_than_or_equal
+        value: 0.85
+    demo_outputs:
+      - positioning: A decision memory for product teams.
+        launch_scope: [Capture, Link, Replay]
+        risk_response:
+          - Start with two integrations
+        quality_score: 0.68
+      - positioning: A lightweight decision layer for teams that already live in GitHub and Slack.
+        launch_scope: [Capture, Link, Replay]
+        risk_response:
+          - Start with two high-quality integrations
+          - Make every captured decision reviewable
+        quality_score: 0.91
+
+  launch_plan:
+    title: Launch planner
+    group: activation
+    needs: [synthesis]
+    prompt: Turn the strategy into a phased six-week launch plan.
+    inputs:
+      strategy: $nodes.synthesis.output
+      launch_window: $input.launch_window
+    outputs:
+      phases: string[]
+      owner_actions: string[]
+    demo_output:
+      phases:
+        - "Weeks 1-2: design partners"
+        - "Weeks 3-4: guided beta"
+        - "Weeks 5-6: public launch"
+      owner_actions:
+        - Recruit eight design partners
+        - Publish integration setup guide
+        - Staff launch-week support rotation
+
+  success_metrics:
+    title: Metrics designer
+    group: activation
+    needs: [synthesis]
+    prompt: Define measurable activation, retention, and trust signals for the strategy.
+    inputs:
+      strategy: $nodes.synthesis.output
+      target: $input.success_target
+    outputs:
+      metrics: string[]
+      north_star: string
+    demo_output:
+      metrics:
+        - First linked decision within 15 minutes
+        - Three weekly timeline replays per active team
+        - Fewer than 2 percent capture reversals
+      north_star: Weekly decisions replayed in active projects
+
+  final_brief:
+    title: Executive editor
+    group: editorial
+    needs: [launch_plan, success_metrics]
+    prompt: Produce the final decision-ready launch brief from the plan and metrics.
+    inputs:
+      plan: $nodes.launch_plan.output
+      measurement: $nodes.success_metrics.output
+      product: $input.product
+    outputs:
+      recommendation: string
+      first_action: string
+      readiness: boolean
+    demo_output:
+      recommendation: Proceed with an eight-team design-partner launch, then expand through a guided beta.
+      first_action: Confirm design partners and instrument time-to-first-linked-decision.
+      readiness: true

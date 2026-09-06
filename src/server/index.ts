@@ -1,0 +1,218 @@
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { readdir, readFile, stat } from "node:fs/promises";
+import { join } from "node:path";
+import { readUiAsset, renderDashboard } from "./templates";
+import { startWorkflow, submitAgentRecovery, submitHumanAnswer } from "../client";
+import { DASHBOARD_PORT } from "../config";
+import type { AgentProvider, AgentRecoveryAction, JsonValue, RunState, WorkflowDefinition } from "../contracts";
+import { loadInitialInput, loadWorkflow } from "../definition";
+import { readAgentMessages, readEvents, runDirectory, runtimeRoot } from "../store";
+
+const workflowPath = process.env.YAMLFLOW_WORKFLOW ?? "workflows/product-launch.yaml";
+const inputPath = process.env.YAMLFLOW_INPUT ?? "examples/product-input.json";
+
+async function readJson<T>(path: string): Promise<T> {
+  return JSON.parse(await readFile(path, "utf8")) as T;
+}
+
+async function listRunStates(): Promise<RunState[]> {
+  try {
+    const entries = await readdir(join(runtimeRoot, "runs"), { withFileTypes: true });
+    const states = await Promise.all(
+      entries
+        .filter((entry) => entry.isDirectory())
+        .map(async (entry) => {
+          try {
+            return await readJson<RunState>(join(runtimeRoot, "runs", entry.name, "state.json"));
+          } catch {
+            return undefined;
+          }
+        }),
+    );
+    return states
+      .filter((state): state is RunState => Boolean(state))
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+async function snapshot(runId?: string): Promise<Record<string, unknown>> {
+  const runs = await listRunStates();
+  const selected = runId ? runs.find((run) => run.runId === runId) : runs[0];
+  if (!selected) return { runs: [], run: null };
+  const directory = runDirectory(selected.runId);
+  const [definition, initialInput, events] = await Promise.all([
+    readJson<WorkflowDefinition>(join(directory, "definition.json")),
+    readJson<JsonValue>(join(directory, "input.json")),
+    readEvents(selected.runId),
+  ]);
+  const agentMessages = Object.fromEntries(await Promise.all(
+    definition.nodes.map(async (node) => [node.id, await readAgentMessages(selected.runId, node.id)] as const),
+  ));
+  return {
+    runs: runs.map((run) => ({
+      runId: run.runId,
+      status: run.status,
+      mode: run.mode,
+      updatedAt: run.updatedAt,
+      completedCount: run.completedCount,
+      totalCount: run.totalCount,
+    })),
+    run: selected,
+    definition,
+    initialInput,
+    events,
+    agentMessages,
+    durablePath: directory,
+  };
+}
+
+function json(response: ServerResponse, status: number, value: unknown): void {
+  response.writeHead(status, {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "no-store",
+  });
+  response.end(JSON.stringify(value));
+}
+
+async function body(request: IncomingMessage): Promise<Record<string, unknown>> {
+  let source = "";
+  for await (const chunk of request) source += chunk.toString();
+  return source ? (JSON.parse(source) as Record<string, unknown>) : {};
+}
+
+async function serveStatic(pathname: string, response: ServerResponse): Promise<void> {
+  if (pathname === "/" || pathname === "/index.html") {
+    const page = await renderDashboard();
+    response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+    response.end(page);
+    return;
+  }
+  const asset = await readUiAsset(pathname);
+  if (!asset) {
+    response.writeHead(404).end("Not found");
+    return;
+  }
+  response.writeHead(200, { "content-type": asset.contentType, "cache-control": "no-store" });
+  response.end(asset.body);
+}
+
+async function handler(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "127.0.0.1"}`);
+  if (request.method === "GET" && url.pathname === "/health") {
+    let durableStore = false;
+    try {
+      await stat(runtimeRoot);
+      durableStore = true;
+    } catch {}
+    json(response, 200, { ok: true, durableStore, transport: "sse", temporalAddress: process.env.TEMPORAL_ADDRESS ?? "127.0.0.1:7233" });
+    return;
+  }
+  if (request.method === "GET" && url.pathname === "/api/snapshot") {
+    json(response, 200, await snapshot(url.searchParams.get("runId") ?? undefined));
+    return;
+  }
+  if (request.method === "GET" && url.pathname === "/api/stream") {
+    response.writeHead(200, {
+      "content-type": "text/event-stream",
+      "cache-control": "no-cache",
+      connection: "keep-alive",
+    });
+    let last = "";
+    const push = async () => {
+      try {
+        const value = JSON.stringify(await snapshot(url.searchParams.get("runId") ?? undefined));
+        if (value !== last) {
+          response.write(`event: snapshot\ndata: ${value}\n\n`);
+          last = value;
+        } else response.write(": heartbeat\n\n");
+      } catch (error) {
+        response.write(`event: error\ndata: ${JSON.stringify({ message: String(error) })}\n\n`);
+      }
+    };
+    await push();
+    const timer = setInterval(push, 700);
+    request.on("close", () => clearInterval(timer));
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/runs") {
+    const requestBody = await body(request);
+    const mode = (requestBody.mode ?? "simulated") as AgentProvider;
+    if (mode !== "simulated" && mode !== "codex") {
+      json(response, 400, { error: "mode must be simulated or codex" });
+      return;
+    }
+    const delayMs = typeof requestBody.delayMs === "number" ? requestBody.delayMs : undefined;
+    const result = await startWorkflow({
+      definition: await loadWorkflow(workflowPath),
+      initialInput: await loadInitialInput(inputPath),
+      mode,
+      delayMs,
+    });
+    json(response, 202, result);
+    return;
+  }
+  const recoveryMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/recovery$/);
+  if (request.method === "POST" && recoveryMatch) {
+    const runId = decodeURIComponent(recoveryMatch[1]);
+    const requestBody = await body(request);
+    const requestId = typeof requestBody.requestId === "string" ? requestBody.requestId : "";
+    const action = requestBody.action as AgentRecoveryAction | undefined;
+    if (!requestId || !action || !["retry_same_session", "retry_fresh_session", "abort_workflow"].includes(action)) {
+      json(response, 400, { error: "requestId and a valid recovery action are required" });
+      return;
+    }
+    const state = (await listRunStates()).find((candidate) => candidate.runId === runId);
+    const pending = state && Object.values(state.nodes).find(
+      (node) => node.recovery?.requestId === requestId && node.recovery.status === "waiting",
+    );
+    if (!state || !pending) {
+      json(response, 409, { error: "The recovery request is not pending for this run" });
+      return;
+    }
+    if (action === "retry_same_session" && !pending.recovery?.canResumeSession) {
+      json(response, 409, { error: "This recovery request has no safe provider session to resume" });
+      return;
+    }
+    json(response, 200, await submitAgentRecovery(runId, { requestId, action }));
+    return;
+  }
+  const inputMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/input$/);
+  if (request.method === "POST" && inputMatch) {
+    const runId = decodeURIComponent(inputMatch[1]);
+    const requestBody = await body(request);
+    const requestId = typeof requestBody.requestId === "string" ? requestBody.requestId : "";
+    const answer = typeof requestBody.answer === "string" ? requestBody.answer.trim() : "";
+    if (!requestId || !answer) {
+      json(response, 400, { error: "requestId and a non-empty answer are required" });
+      return;
+    }
+    const state = (await listRunStates()).find((candidate) => candidate.runId === runId);
+    const pending = state && Object.values(state.nodes).find(
+      (node) => node.humanRequest?.requestId === requestId && node.humanRequest.status === "waiting",
+    );
+    if (!state || !pending) {
+      json(response, 409, { error: "The human input request is not pending for this run" });
+      return;
+    }
+    json(response, 200, await submitHumanAnswer(runId, { requestId, answer }));
+    return;
+  }
+  await serveStatic(url.pathname, response);
+}
+
+export function createDashboardServer() {
+  return createServer((request, response) => {
+    handler(request, response).catch((error) => json(response, 500, { error: String(error) }));
+  });
+}
+
+export function main() {
+  const server = createDashboardServer();
+  server.listen(DASHBOARD_PORT, "127.0.0.1", () => {
+    console.log(`Steward Server ready at http://127.0.0.1:${DASHBOARD_PORT}`);
+  });
+  return server;
+}

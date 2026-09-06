@@ -1,0 +1,212 @@
+version: 1
+name: Privacy launch with human questions
+description: Two agents ask independent questions, both answers join, three specialists research in parallel, and a bounded strategy loop produces the launch brief.
+
+defaults:
+  provider: codex
+  max_parallelism: 4
+  delay_ms: 0
+  retry:
+    maximum_attempts: 2
+
+groups:
+  foundation:
+    title: Foundation
+    max_parallelism: 1
+  clarification:
+    title: Agent questions
+    description: Two agents independently identify the decisions only the operator can make.
+    max_parallelism: 2
+  decisions:
+    title: Human answers
+    description: Both durable input gates must close before research begins.
+    max_parallelism: 2
+  research:
+    title: Parallel research
+    max_parallelism: 3
+  strategy:
+    title: Challenge loop
+    max_parallelism: 1
+  editorial:
+    title: Final join
+    max_parallelism: 1
+
+nodes:
+  intake:
+    title: Brief analyst
+    group: foundation
+    prompt: Normalize the request into a concise product problem, audience, and fixed constraints. Do not make decisions that belong to the user.
+    inputs:
+      brief: $input.brief
+      audience: $input.audience
+      launch_window: $input.launch_window
+    outputs:
+      problem: string
+      audience: string
+      constraints: string[]
+    demo_output:
+      problem: Launch a privacy-first AI meeting assistant.
+      audience: Remote product and design teams handling confidential discussions.
+      constraints: [Thirty-day window, Privacy-led positioning]
+
+  positioning_interviewer:
+    title: Positioning interviewer
+    group: clarification
+    needs: [intake]
+    prompt: Ask exactly one concise, high-leverage question that the product owner must answer before customer positioning can be credible. Return the question and why it matters; do not answer it.
+    inputs:
+      problem: $nodes.intake.output.problem
+      audience: $nodes.intake.output.audience
+    outputs:
+      question: string
+      rationale: string
+    demo_output:
+      question: Which buyer should the first launch optimize for, and what urgent meeting problem will make them switch?
+      rationale: A narrow buyer and urgent job determine the message, acquisition channel, and pilot evidence.
+
+  privacy_interviewer:
+    title: Privacy interviewer
+    group: clarification
+    needs: [intake]
+    prompt: Ask exactly one concise question about the non-negotiable privacy boundary for the first release. Return the question and why it matters; do not choose a boundary yourself.
+    inputs:
+      problem: $nodes.intake.output.problem
+      constraints: $nodes.intake.output.constraints
+    outputs:
+      question: string
+      rationale: string
+    demo_output:
+      question: Must all meeting content remain on-device, or may an explicitly approved cloud service process encrypted content?
+      rationale: This boundary changes the product architecture, claims, supported hardware, and launch schedule.
+
+  positioning_answer:
+    title: Your positioning answer
+    kind: human
+    group: decisions
+    needs: [positioning_interviewer]
+    question: $nodes.positioning_interviewer.output.question
+
+  privacy_answer:
+    title: Your privacy answer
+    kind: human
+    group: decisions
+    needs: [privacy_interviewer]
+    question: $nodes.privacy_interviewer.output.question
+
+  audience_research:
+    title: Customer researcher
+    group: research
+    needs: [positioning_answer, privacy_answer]
+    prompt: Analyze the target customer's strongest jobs, objections, and language. Treat both operator answers as binding constraints.
+    inputs:
+      brief: $nodes.intake.output
+      positioning_answer: $nodes.positioning_answer.output.answer
+      privacy_answer: $nodes.privacy_answer.output.answer
+    outputs:
+      jobs: string[]
+      objections: string[]
+      message: string
+    demo_output:
+      jobs: [Preserve decisions, Protect confidential discussions]
+      objections: [Privacy risk, Review burden]
+      message: Keep the decisions without surrendering the conversation.
+
+  competition_research:
+    title: Competitive researcher
+    group: research
+    needs: [positioning_answer, privacy_answer]
+    prompt: Identify credible alternatives and propose a differentiation that respects the operator's buyer and privacy choices. Do not invent verified market evidence; label inferences.
+    inputs:
+      brief: $nodes.intake.output
+      positioning_answer: $nodes.positioning_answer.output.answer
+      privacy_answer: $nodes.privacy_answer.output.answer
+    outputs:
+      alternatives: string[]
+      differentiation: string
+      evidence_needed: string[]
+    demo_output:
+      alternatives: [Manual notes, Cloud meeting assistants]
+      differentiation: Private decision memory with review before sharing.
+      evidence_needed: [Buyer interviews, Privacy benchmark]
+
+  feasibility_research:
+    title: Delivery researcher
+    group: research
+    needs: [positioning_answer, privacy_answer]
+    prompt: Define a credible 30-day scope, major risks, and release gates under the operator's answers.
+    inputs:
+      brief: $nodes.intake.output
+      positioning_answer: $nodes.positioning_answer.output.answer
+      privacy_answer: $nodes.privacy_answer.output.answer
+      launch_window: $input.launch_window
+    outputs:
+      scope: string[]
+      risks: string[]
+      gates: string[]
+    demo_output:
+      scope: [Private beta, Reviewed summaries]
+      risks: [Model performance, Installation friction]
+      gates: [No content egress, Five design partners]
+
+  synthesis:
+    title: Strategy challenger
+    group: strategy
+    needs: [audience_research, competition_research, feasibility_research]
+    prompt: Reconcile the three research branches into one strategy. Challenge its weakest assumption on every iteration. Iterations 1 and 2 must return a quality_score below 0.9 so the proposal is challenged twice; iteration 3 may pass only if those challenges are resolved. Treat operator answers as binding.
+    inputs:
+      audience: $nodes.audience_research.output
+      competition: $nodes.competition_research.output
+      feasibility: $nodes.feasibility_research.output
+      positioning_answer: $nodes.positioning_answer.output.answer
+      privacy_answer: $nodes.privacy_answer.output.answer
+    outputs:
+      positioning: string
+      launch_scope: string[]
+      risks: string[]
+      challenge_resolved: string
+      quality_score: number
+    loop:
+      max_iterations: 3
+      carry_as: previous_strategy
+      on_exhaustion: fail
+      until:
+        path: quality_score
+        operator: greater_than_or_equal
+        value: 0.9
+    demo_outputs:
+      - positioning: Initial privacy-led proposal.
+        launch_scope: [Private beta]
+        risks: [Buyer urgency is untested]
+        challenge_resolved: Buyer urgency still needs validation.
+        quality_score: 0.62
+      - positioning: Narrowed proposal for the selected buyer.
+        launch_scope: [Five-team beta]
+        risks: [Privacy performance tradeoff]
+        challenge_resolved: Scope narrowed, but the performance claim needs a gate.
+        quality_score: 0.81
+      - positioning: Evidence-gated private launch for the selected buyer.
+        launch_scope: [Five-team beta, Measured privacy and usefulness gates]
+        risks: [Adoption, Accuracy]
+        challenge_resolved: Claims are conditional on explicit buyer, privacy, and release evidence.
+        quality_score: 0.93
+
+  final_brief:
+    title: Executive editor
+    group: editorial
+    needs: [synthesis]
+    prompt: Produce a decision-ready recommendation with the important risks and an actionable 30-day plan. State the two operator decisions that shaped the result.
+    inputs:
+      strategy: $nodes.synthesis.output
+      positioning_answer: $nodes.positioning_answer.output.answer
+      privacy_answer: $nodes.privacy_answer.output.answer
+      product: $input.product
+    outputs:
+      recommendation: string
+      risks: string[]
+      thirty_day_plan: string[]
+      readiness: boolean
+    demo_output:
+      recommendation: Run an evidence-gated five-team private beta.
+      risks: [Adoption, Accuracy]
+      thirty_day_plan: [Confirm buyers, Build narrow beta, Validate gates, Launch pilots]
+      readiness: true

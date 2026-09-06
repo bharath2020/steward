@@ -1,0 +1,5 @@
+{
+  "name": "Steward",
+  "tagline": "Workflow console",
+  "description": "Steward Console: inspect durable agent workflows, accepted outputs, and recoverable progress."
+}
