@@ -41,6 +41,12 @@ Steward separates orchestration from agent work.
 
 The root Codex agent is an operator: start, inspect, retry through Temporal, and report. It does not answer node prompts. That boundary is also recorded in `AGENTS.md`.
 
+## Prompt source loading
+
+Agent nodes accept exactly one of `prompt` or `prompt_file` ([ADR-011](decisions.md#adr-011--file-prompts-are-resolved-before-workflow-start)). Both CLI and server use `loadWorkflow` in `src/definition.ts` to load UTF-8 file contents relative to the YAML directory before starting Temporal. The pure `parseWorkflow` API accepts preloaded content as an optional third argument; it never reads a file itself.
+
+Compiled nodes always contain assignment text in `prompt`. File sources also carry the declared path and content SHA-256 in `promptSource`, and the definition hash binds their loaded content. The definition passed to Temporal and saved in `definition.json` is the snapshot reused by Activities and recovery. No live prompt-file read occurs inside Workflow or Activity execution. Existing inline hashes and runtime contracts remain unchanged.
+
 ## Durability boundary
 
 The bundled Temporal development server uses persistent SQLite so workflows survive worker or launcher restarts. The browser's EventSource reconnects after a network interruption and reloads the latest disk projection. Production should use Temporal Cloud or a production Temporal deployment, external artifact storage, authenticated APIs, idempotent side effects, secrets management, and workload-specific sandbox policies.

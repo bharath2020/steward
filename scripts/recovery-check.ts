@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import YAML from "yaml";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,6 +14,7 @@ import type {
   JsonValue,
   RunState,
   TimelineEvent,
+  WorkflowDefinition,
 } from "../src/contracts";
 
 const execute = promisify(execFile);
@@ -76,10 +79,10 @@ async function readEvents(runtime: string, runId: string): Promise<TimelineEvent
   return source.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line) as TimelineEvent);
 }
 
-async function startRun(environment: NodeJS.ProcessEnv, delayMs = 60): Promise<string> {
+async function startRun(environment: NodeJS.ProcessEnv, delayMs = 60, workflowPath = "workflows/product-launch.yaml"): Promise<string> {
   const { stdout } = await execute(process.execPath, [
     "--import", "tsx", "src/start.ts",
-    "--workflow", "workflows/product-launch.yaml",
+    "--workflow", workflowPath,
     "--input", "examples/product-input.json",
     "--mode", "simulated",
     "--delay-ms", String(delayMs),
@@ -112,13 +115,24 @@ async function main(): Promise<void> {
     launch(process.execPath, ["--import", "tsx", "src/server.ts"], environment);
     await waitFor(async () => (await connectable(dashboardPort)) ? true : undefined, "recovery API server");
 
+    // Snapshot a file prompt, then delete it before any worker can execute the run.
+    const fileWorkflow = YAML.parse(await readFile("workflows/product-launch.yaml", "utf8"));
+    const originalPrompt: string = fileWorkflow.nodes.intake.prompt;
+    const promptPath = join(temporary, "intake.md");
+    const workflowPath = join(temporary, "file-prompt.yaml");
+    delete fileWorkflow.nodes.intake.prompt;
+    fileWorkflow.nodes.intake.prompt_file = "./intake.md";
+    await writeFile(promptPath, originalPrompt);
+    await writeFile(workflowPath, YAML.stringify(fileWorkflow));
+    const receiptRunId = await startRun(environment, 60, workflowPath);
+    await rm(promptPath);
+
     // Catastrophic worker loss after provider completion but before Activity acknowledgement.
     let worker = launch(process.execPath, ["--import", "tsx", "src/worker.ts"], {
       ...environment,
       YAMLFLOW_TEST_PAUSE_AFTER_RECEIPT_NODE: "intake",
       YAMLFLOW_TEST_PAUSE_AFTER_RECEIPT_MS: "30000",
     });
-    const receiptRunId = await startRun(environment);
     const receiptRun = join(temporary, "runs", receiptRunId);
     const primaryReceiptPath = join(receiptRun, "nodes", "intake", "completion-receipt.json");
     const mirrorReceiptPath = join(receiptRun, "receipts", "intake-iteration-01.json");
@@ -139,6 +153,17 @@ async function main(): Promise<void> {
       return state?.status === "completed" ? state : undefined;
     }, "receipt-recovered workflow completion");
     assert.equal(recoveredReceiptRun.completedCount, recoveredReceiptRun.totalCount);
+    const savedDefinition = await readJson<WorkflowDefinition>(join(receiptRun, "definition.json"));
+    const savedIntake = savedDefinition?.nodes.find((node) => node.id === "intake");
+    assert.equal(savedIntake?.prompt, originalPrompt);
+    assert.deepEqual(savedIntake?.promptSource, {
+      path: "./intake.md",
+      sha256: createHash("sha256").update(originalPrompt).digest("hex"),
+    });
+    const persistedPrompt = await readFile(join(receiptRun, "nodes", "intake", "prompt.txt"), "utf8");
+    assert(persistedPrompt.includes(originalPrompt.trim()), "the restarted Activity must use the saved file prompt");
+    assert.equal(primaryReceipt.promptSha256, createHash("sha256").update(persistedPrompt.slice(0, -1)).digest("hex"));
+    await assert.rejects(readFile(promptPath), { code: "ENOENT" });
 
     const [restoredMirror, restoredOutput, receiptEvents, intakeMessages] = await Promise.all([
       readJson<AgentCompletionReceipt>(mirrorReceiptPath),
@@ -224,6 +249,8 @@ async function main(): Promise<void> {
         deletedReceiptRecovered: true,
         deletedOutputRecovered: true,
         providerReruns: 0,
+        deletedPromptFileSnapshotRecovered: true,
+        promptSourceSha256: savedIntake!.promptSource!.sha256,
       },
       networkRecovery: {
         runId: networkRunId,

@@ -16,6 +16,7 @@ This register records choices made for the production direction. It does not ass
 | ADR-008 | Production is an evidence gate, not a feature milestone | All releases |
 | ADR-009 | Explicit module ownership and inward dependencies | Architecture definition; P1 enforcement |
 | ADR-010 | One repository with CLI, server, and UI template boundaries | Current component extraction; broader control services remain planned |
+| ADR-011 | V1 file prompts resolve into immutable assignment text before start | Current loader extension |
 
 ## ADR-001 — CLI first with one control service
 
@@ -124,3 +125,21 @@ Compose the UI from a shell and allowlisted component fragments, with module-rel
 **Approved display identity.** The product name is Steward. Its components are Steward CLI, Steward Server, and Steward Console; Console denotes the browser UI. Display branding is isolated in `ui/brand.json`. Repository relocation and publication are in progress and require their own completion evidence.
 
 This naming decision retains existing execution identities: `YAMLFLOW_*` settings, `yamlflow-<runId>` workflow IDs, the `yamlflow-agent-nodes` task queue, `yamlAgentWorkflow`/`yamlAgentWorkflowV2` workflow types, schema names, and persisted run data remain unchanged. Older design proposals also retain lowercase `yamlflow` command/schema identifiers until a separately reviewed contract change adopts different spellings. Branding does not authorize rewriting historical provenance or altering replay behavior.
+
+## ADR-011 — File prompts are resolved before workflow start
+
+**Context.** Authors need to keep long agent assignments in separate files while retaining existing inline V1 workflows. Reading a mutable prompt during an Activity retry would change the assignment and receipt identity.
+
+**Decision.** Extend V1 agent nodes with `prompt_file`, mutually exclusive with `prompt`. This explicitly compatible extension refines ADR-002's source-loading contract and supersedes the inline-only authoring requirement. Existing inline semantics and hashes remain unchanged. Human nodes keep `question` and reject `prompt_file`.
+
+`loadWorkflow` owns filesystem I/O, resolving relative paths against the YAML directory and accepting explicit absolute paths. It reads each resolved path once per load and supplies UTF-8 content as values to the pure parser/compiler. `parseWorkflow(source, sourcePath, promptFiles)` accepts an optional read-only map keyed by the author's literal file references; absent contents produce an actionable error without disk access. These remain the transitional source-loading/compiler functions in `src/definition.ts` under ADR-009.
+
+Compile the loaded text into the existing node `prompt` and add optional `promptSource: { path, sha256 }` provenance. Bind loaded text into the definition hash only for file-backed definitions, preserving legacy inline-only hashes. The current hash remains sensitive to declared file paths and parsed source ordering; this is not the full canonical semantic hash design planned by ADR-002. Exact UTF-8 text is preserved, including line endings and BOM, before the existing worker envelope trims assignment boundaries.
+
+**Execution.** CLI and server already call the common loader before Temporal start. Temporal receives the resolved definition; existing definition projections and Activity inputs carry the snapshot. Retries, loops, and recovery use that content without consulting prompt files. A fresh start reloads files. This changes no Workflow command sequence, Activity API, receipt contract, or runtime history migration requirement. File content has the same literal semantics as inline content; variables remain in `inputs`.
+
+**Validation and boundaries.** Require one non-empty source per agent; reject conflicting fields, invalid paths, read/UTF-8 errors, and empty contents before start. References are literal local paths, with the same host filesystem access as other source loading; no URL retrieval, environment interpolation, include expansion, or new executor capability is added. The current operator-trusted loader is not a filesystem sandbox. Loading multiple distinct files does not promise an atomic filesystem-wide snapshot.
+
+**Alternatives.** A structured prompt union or named registry adds authoring complexity without a current reuse requirement. Custom YAML tags tie tools to a custom loader. Reading at dispatch or retry weakens reproducibility.
+
+**Evidence.** See [file prompt validation](validation/prompt-file.md) for compatibility, error, snapshot, and runtime checks. Production qualification still follows ADR-008.

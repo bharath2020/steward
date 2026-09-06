@@ -51,6 +51,8 @@ export interface WorkflowNode {
   group?: string;
   needs: string[];
   prompt: string;
+  /** Author's file reference and hash of the snapshotted UTF-8 content. */
+  promptSource?: { path: string; sha256: string };
   inputs: Record<string, JsonValue>;
   outputs: Record<string, OutputType>;
   outputSchema: JsonSchema;

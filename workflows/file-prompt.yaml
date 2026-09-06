@@ -1,0 +1,13 @@
+version: 1
+name: File prompt review
+defaults:
+  provider: simulated
+nodes:
+  review:
+    prompt_file: ./prompts/review.md
+    inputs:
+      brief: $input.brief
+    outputs:
+      summary: string
+    demo_output:
+      summary: The brief has been reviewed.

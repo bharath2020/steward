@@ -154,6 +154,34 @@ nodes:
         value: 0.85
 ```
 
+Agent nodes require exactly one of `prompt` or `prompt_file`. Keep long assignments in UTF-8 text or Markdown files:
+
+```yaml
+nodes:
+  review:
+    prompt_file: ./prompts/review.md
+    inputs:
+      brief: $input.brief
+    outputs:
+      summary: string
+```
+
+Relative paths resolve from the YAML file's directory, regardless of the launch directory. Absolute paths also work; relative paths make workflows easier to share. Paths are literal filesystem paths: no URL fetching, environment expansion, or nested includes. Human nodes continue to use `question`; `prompt_file` is rejected on them.
+
+Both the CLI and server load file contents before starting a run. Missing, unreadable, invalid UTF-8, and empty/whitespace-only files fail validation with the node ID and reference. Specifying both prompt fields is an error, even if one is empty or null.
+
+The compiled definition stores the prompt text plus `promptSource.path` and its SHA-256. File content changes affect `definitionHash`. An active run, retry, or resumed execution uses its saved text even after the source file is edited or deleted; starting a new run loads the file again. Inline-only definition hashes retain their existing behavior.
+
+File and inline prompts are literal assignment text. Neither interpolates `{{variables}}` or `$input` inside the prompt. Declare dynamic data under `inputs`; Steward resolves it and appends it to the worker assignment.
+
+Try the [file prompt example](workflows/file-prompt.yaml):
+
+```bash
+npm run start -- --workflow workflows/file-prompt.yaml --input examples/product-input.json --mode simulated
+```
+
+This command requires a running Temporal server and Steward worker, as with the other examples.
+
 All output fields are required. Supported types are `string`, `number`, `boolean`, `object`, `string[]`, and `number[]`. References may target `$input`, `$input.path`, `$nodes.<id>.output`, or `$nodes.<id>.output.path`.
 
 Groups apply per-group parallelism limits while preserving the global cap. Loops are deliberately bounded to 20 iterations and support `equals`, `not_equals`, numeric comparisons, `contains`, and `truthy`. A downstream fan-in sees only the final accepted loop output.

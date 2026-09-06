@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import YAML from "yaml";
 import Ajv from "ajv";
 import type {
@@ -66,12 +66,41 @@ function normalizeLoop(id: string, raw: unknown): NodeLoop | undefined {
   };
 }
 
-function normalizeNode(id: string, raw: unknown, defaultProvider: AgentProvider): WorkflowNode {
+function validatePromptSource(id: string, raw: Record<string, unknown>): void {
+  const hasFile = Object.hasOwn(raw, "prompt_file");
+  if (raw.kind === "human") {
+    if (hasFile) fail(`node ${id}.prompt_file is not supported for human input; use question`);
+    return;
+  }
+  if (hasFile && Object.hasOwn(raw, "prompt")) fail(`node ${id} must specify exactly one of prompt or prompt_file`);
+  if (hasFile) {
+    if (typeof raw.prompt_file !== "string" || !raw.prompt_file.trim() || raw.prompt_file.includes("\0")) {
+      fail(`node ${id}.prompt_file must be a non-empty file path without null bytes`);
+    }
+  } else if (typeof raw.prompt !== "string" || !raw.prompt.trim()) {
+    fail(`node ${id} requires exactly one of prompt or prompt_file`);
+  }
+}
+
+function normalizeNode(
+  id: string,
+  raw: unknown,
+  defaultProvider: AgentProvider,
+  promptFiles: ReadonlyMap<string, string>,
+): WorkflowNode {
   if (!/^[a-z][a-z0-9_-]*$/.test(id)) fail(`node id ${id} must use lowercase letters, numbers, - or _`);
   if (!isRecord(raw)) fail(`node ${id} must be an object`);
   const kind = raw.kind === undefined ? "agent" : raw.kind;
   if (kind !== "agent" && kind !== "human") fail(`node ${id}.kind must be agent or human`);
-  if (kind === "agent" && (typeof raw.prompt !== "string" || !raw.prompt.trim())) fail(`node ${id}.prompt is required`);
+  validatePromptSource(id, raw);
+  const filePath = typeof raw.prompt_file === "string" ? raw.prompt_file : undefined;
+  const prompt = filePath === undefined ? raw.prompt : promptFiles.get(filePath);
+  if (filePath !== undefined && prompt === undefined) {
+    fail(`node ${id}.prompt_file ${JSON.stringify(filePath)} has not been loaded; use loadWorkflow or supply promptFiles to parseWorkflow`);
+  }
+  if (filePath !== undefined && (typeof prompt !== "string" || !prompt.trim())) {
+    fail(`node ${id}.prompt_file ${JSON.stringify(filePath)} must contain a non-empty prompt`);
+  }
   if (kind === "human" && (typeof raw.question !== "string" || !raw.question.trim())) fail(`node ${id}.question is required`);
   if (kind === "human" && raw.loop !== undefined) fail(`node ${id}.loop is not supported for human input`);
   if (kind === "human" && raw.inputs !== undefined) fail(`node ${id}.inputs is derived from question and must be omitted`);
@@ -99,7 +128,10 @@ function normalizeNode(id: string, raw: unknown, defaultProvider: AgentProvider)
     agent: raw.agent === undefined ? defaultProvider : provider(raw.agent, `node ${id}.agent`),
     group: typeof raw.group === "string" ? raw.group : undefined,
     needs: [...new Set(needs as string[])],
-    prompt: kind === "human" ? "Wait for the operator's answer." : raw.prompt as string,
+    prompt: kind === "human" ? "Wait for the operator's answer." : prompt as string,
+    ...(filePath === undefined ? {} : {
+      promptSource: { path: filePath, sha256: createHash("sha256").update(prompt as string).digest("hex") },
+    }),
     inputs: inputs as Record<string, JsonValue>,
     outputs,
     outputSchema: schemaFor(outputs),
@@ -139,12 +171,29 @@ function validateGraph(nodes: WorkflowNode[]): void {
   nodes.forEach((node) => visit(node.id));
 }
 
-export function parseWorkflow(source: string, sourcePath = "workflow.yaml"): WorkflowDefinition {
+function parseDocument(source: string): Record<string, unknown> & { nodes: Record<string, unknown>; name: string } {
   const raw = YAML.parse(source) as unknown;
   if (!isRecord(raw)) fail("document must be an object");
   if (raw.version !== 1) fail("version must be 1");
   if (typeof raw.name !== "string" || !raw.name.trim()) fail("name is required");
   if (!isRecord(raw.nodes) || Object.keys(raw.nodes).length === 0) fail("nodes must be a non-empty object");
+  return raw as Record<string, unknown> & { nodes: Record<string, unknown>; name: string };
+}
+
+/** Pure parsing: file contents must be supplied by the caller, never read here. */
+export function parseWorkflow(
+  source: string,
+  sourcePath = "workflow.yaml",
+  promptFiles: ReadonlyMap<string, string> = new Map(),
+): WorkflowDefinition {
+  return compileWorkflow(parseDocument(source), sourcePath, promptFiles);
+}
+
+function compileWorkflow(
+  raw: ReturnType<typeof parseDocument>,
+  sourcePath: string,
+  promptFiles: ReadonlyMap<string, string>,
+): WorkflowDefinition {
 
   const defaultsRaw = isRecord(raw.defaults) ? raw.defaults : {};
   const defaultProvider = defaultsRaw.provider === undefined ? "simulated" : provider(defaultsRaw.provider, "defaults.provider");
@@ -156,7 +205,7 @@ export function parseWorkflow(source: string, sourcePath = "workflow.yaml"): Wor
   if (Number(maximumAttempts) > 5) fail("defaults.retry.maximum_attempts cannot exceed 5");
   if (typeof delayMs !== "number" || delayMs < 0) fail("defaults.delay_ms must be a non-negative number");
 
-  const nodes = Object.entries(raw.nodes).map(([id, value]) => normalizeNode(id, value, defaultProvider));
+  const nodes = Object.entries(raw.nodes).map(([id, value]) => normalizeNode(id, value, defaultProvider, promptFiles));
   const groupsRaw = raw.groups === undefined ? {} : raw.groups;
   if (!isRecord(groupsRaw)) fail("groups must be an object");
   const groups: WorkflowGroup[] = Object.entries(groupsRaw).map(([id, value]) => {
@@ -178,7 +227,9 @@ export function parseWorkflow(source: string, sourcePath = "workflow.yaml"): Wor
   });
   validateGraph(nodes);
 
-  const canonical = JSON.stringify({ ...raw, sourcePath: undefined });
+  const resolvedPrompts = nodes.filter((node) => node.promptSource).map((node) => ({ id: node.id, prompt: node.prompt }));
+  // Preserve legacy hashes for inline-only definitions. Bind file contents for new definitions.
+  const canonical = JSON.stringify({ ...raw, sourcePath: undefined, ...(resolvedPrompts.length ? { resolvedPrompts } : {}) });
   return {
     version: 1,
     name: raw.name,
@@ -198,7 +249,32 @@ export function parseWorkflow(source: string, sourcePath = "workflow.yaml"): Wor
 
 export async function loadWorkflow(filePath: string): Promise<WorkflowDefinition> {
   const absolute = resolve(filePath);
-  return parseWorkflow(await readFile(absolute, "utf8"), absolute);
+  const raw = parseDocument(await readFile(absolute, "utf8"));
+  const promptFiles = new Map<string, string>();
+  const contentByPath = new Map<string, string>();
+  // Check every source declaration before reading any referenced file.
+  for (const [id, value] of Object.entries(raw.nodes)) {
+    if (!isRecord(value)) fail(`node ${id} must be an object`);
+    validatePromptSource(id, value);
+  }
+  for (const [id, value] of Object.entries(raw.nodes)) {
+    const node = value as Record<string, unknown>;
+    if (typeof node.prompt_file !== "string") continue;
+    const promptPath = resolve(dirname(absolute), node.prompt_file);
+    let content = contentByPath.get(promptPath);
+    if (content === undefined) {
+      try {
+        const bytes = await readFile(promptPath);
+        content = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        fail(`node ${id}.prompt_file ${JSON.stringify(node.prompt_file)} cannot be read as UTF-8: ${reason}`);
+      }
+      contentByPath.set(promptPath, content);
+    }
+    promptFiles.set(node.prompt_file, content);
+  }
+  return compileWorkflow(raw, absolute, promptFiles);
 }
 
 export async function loadInitialInput(filePath: string): Promise<JsonValue> {
