@@ -2,11 +2,13 @@
 # Download a source archive and launch setup. Git is not required.
 set -euo pipefail
 
+# EXIT traps run after function locals are unwound on newer Bash versions.
+steward_download_temp=""
+steward_install_lock=""
+
 main() {
   local install_dir="${STEWARD_INSTALL_DIR:-$HOME/Applications/Steward}"
   local ref="${STEWARD_REF:-codex/one-click-setup}"
-  local scratch=""
-  local install_lock=""
   case "$install_dir" in /*) ;; *) echo "STEWARD_INSTALL_DIR must be an absolute path." >&2; return 1;; esac
   case "$ref" in ''|*[!a-zA-Z0-9._/-]*) echo "Invalid STEWARD_REF." >&2; return 1;; esac
 
@@ -18,36 +20,36 @@ main() {
     echo "Reopening your existing Steward installation at $install_dir"
   else
     mkdir -p "$(dirname "$install_dir")"
-    install_lock="$install_dir.installing"
-    if ! mkdir "$install_lock" 2>/dev/null; then
-      echo "Another download is in progress ($install_lock)." >&2
+    steward_install_lock="$install_dir.installing"
+    if ! mkdir "$steward_install_lock" 2>/dev/null; then
+      echo "Another download is in progress ($steward_install_lock)." >&2
       return 1
     fi
-    trap 'if [ -n "${scratch:-}" ]; then rm -rf "$scratch"; fi; if [ -n "${install_lock:-}" ]; then rmdir "$install_lock"; fi' EXIT
+    trap 'if [ -n "${steward_download_temp:-}" ]; then rm -rf "$steward_download_temp"; fi; if [ -n "${steward_install_lock:-}" ]; then rmdir "$steward_install_lock"; fi' EXIT
     if [ -e "$install_dir" ]; then
       echo "The installation directory appeared during setup; rerun to reconnect." >&2
       return 1
     fi
     # Stage beside the destination so publishing the complete directory is atomic.
-    scratch=$(mktemp -d "$(dirname "$install_dir")/.steward-download.XXXXXX")
+    steward_download_temp=$(mktemp -d "$(dirname "$install_dir")/.steward-download.XXXXXX")
     echo "Downloading Steward…"
     curl --fail --silent --show-error --location --retry 3 \
-      "https://codeload.github.com/bharath2020/steward/tar.gz/$ref" -o "$scratch/source.tar.gz"
-    mkdir "$scratch/app"
-    tar -xzf "$scratch/source.tar.gz" --strip-components=1 -C "$scratch/app"
-    test -f "$scratch/app/package-lock.json"
-    test -f "$scratch/app/scripts/setup.sh"
-    printf '%s\n' "$ref" > "$scratch/app/.steward-install"
+      "https://codeload.github.com/bharath2020/steward/tar.gz/$ref" -o "$steward_download_temp/source.tar.gz"
+    mkdir "$steward_download_temp/app"
+    tar -xzf "$steward_download_temp/source.tar.gz" --strip-components=1 -C "$steward_download_temp/app"
+    test -f "$steward_download_temp/app/package-lock.json"
+    test -f "$steward_download_temp/app/scripts/setup.sh"
+    printf '%s\n' "$ref" > "$steward_download_temp/app/.steward-install"
     # macOS/BSD and GNU mv both support -n: never replace an existing install.
-    mv -n "$scratch/app" "$install_dir"
-    if [ -d "$scratch/app" ]; then
+    mv -n "$steward_download_temp/app" "$install_dir"
+    if [ -d "$steward_download_temp/app" ]; then
       echo "Another installer created $install_dir. Rerun after it finishes." >&2
       return 1
     fi
-    rm -rf "$scratch"
-    scratch=""
-    rmdir "$install_lock"
-    install_lock=""
+    rm -rf "$steward_download_temp"
+    steward_download_temp=""
+    rmdir "$steward_install_lock"
+    steward_install_lock=""
     trap - EXIT
   fi
   echo "Steward location: $install_dir"
