@@ -13,6 +13,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  isolated-macos-setup:
+    name: Fresh macOS setup from GitHub
+    runs-on: macos-14
+    timeout-minutes: 20
+    env:
+      STEWARD_ISOLATED_SETUP_TEST: '1'
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Verify clean checkout and record host prerequisites
+        run: |
+          test ! -e node_modules
+          test ! -e runtime
+          sw_vers
+          git rev-parse HEAD
+          command -v node || true
+          command -v brew || true
+          if command -v temporal; then
+            echo "Expected a runner without Temporal so setup exercises its installation."
+            exit 1
+          fi
+      - name: Install and launch from the repository command
+        run: bash scripts/setup.sh --example file --no-open
+      - name: Verify Temporal completion, committed output, and repeat setup
+        run: node --import tsx scripts/verify-installed-setup.cjs
+      - name: Run repository verification
+        run: npm run verify
+      - name: Upload setup evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: isolated-macos-setup-${{ github.sha }}
+          path: |
+            output/isolated-setup-verdict.json
+            runtime/services/*.log
+            runtime/services/setup-start.json
+            runtime/runs/
+          if-no-files-found: warn
+          retention-days: 7
+
   verify:
     name: Verify (Node ${{ matrix.node }})
     runs-on: ubuntu-24.04

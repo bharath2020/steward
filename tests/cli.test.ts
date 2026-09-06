@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 
 test("CLI modules can be imported without issuing commands or starting local services", () => {
-  const modules = ["../src/cli/start", "../src/cli/answer", "../src/cli/launcher"].map(
+  const modules = ["../src/cli/start", "../src/cli/answer", "../src/cli/launcher", "../src/cli/setup"].map(
     (module) => require.resolve(module),
   );
   const script = `

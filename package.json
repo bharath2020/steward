@@ -20,6 +20,7 @@
   ],
   "description": "Durable agent workflows with a CLI, server, and customizable console. Powered by Temporal and Codex.",
   "scripts": {
+    "setup": "bash scripts/setup.sh",
     "build": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "verify": "npm run build && npm test",

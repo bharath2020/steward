@@ -26,6 +26,33 @@ Steward Server composes the Console shell through [`src/server/templates.ts`](..
 
 **Dark** and **Light** use shared semantic tokens. **System** follows the operating system's color preference, including changes while the page is open. The browser stores `{layout, theme}` under `agent-workflow:appearance:v1`; invalid or unavailable preferences fall back to Board and Dark. Preferences are applied before the first paint. Reduced-motion settings remain respected.
 
+## Phone and iPad layouts
+
+Responsive composition stays in `assets/layouts.css` under ADR-010:
+
+- Below 700 CSS pixels, including narrow iPad Split View, panels stack with a
+  horizontal run picker and a viewport-sized graph. Layout, theme, Runner, and
+  Pace remain available; the timeline heading remains visible.
+- From 700 through 1180 pixels, Board pairs the graph and inspector below a
+  horizontal run picker. Review gives the graph the full width, then pairs the
+  inspector and vertical timeline. Panel heights adapt to the viewport.
+- Wider screens retain the desktop composition, including larger iPads in
+  landscape. Short desktop windows scroll so minimum-height panels stay reachable.
+
+Touch pointers and widths up to 1180 pixels receive 44-pixel control targets and
+16-pixel form text. Phone padding accounts for display safe areas; dynamic viewport
+units follow browser chrome. Wide graphs and run history scroll within their panels.
+Resizing uses the same mounted components and does not replace answer drafts.
+
+Validation on 2026-09-06: typecheck and all 48 existing tests passed (tests used
+`node --import tsx --test tests/*.test.ts` because the sandbox blocked the tsx CLI
+IPC socket). Chromium measurements found no page horizontal overflow in Board or
+Review at 320×568, 390×844, 600×900, 768×1024, 820×1180, 1024×768,
+1180×820, 1366×1024, and 1440×900. All toolbar selects met the 44-pixel minimum
+at the phone/tablet widths. Screenshots are in `output/playwright/phone-board.png`,
+`ipad-board.png`, and `ipad-review.png`. These are browser viewport checks, not
+physical-device Safari certification.
+
 ## Customize a component
 
 Edit its HTML under `templates/components/`. Shell includes use `{{> component}}`; text fields use escaped `{{brand.name}}`, `{{brand.tagline}}`, and `{{brand.description}}`. Templates are repository-authored static fragments; they do not execute expressions or arbitrary code. Unknown tokens fail instead of being silently rendered.

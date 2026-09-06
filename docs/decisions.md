@@ -17,6 +17,7 @@ This register records choices made for the production direction. It does not ass
 | ADR-009 | Explicit module ownership and inward dependencies | Architecture definition; P1 enforcement |
 | ADR-010 | One repository with CLI, server, and UI template boundaries | Current component extraction; broader control services remain planned |
 | ADR-011 | V1 file prompts resolve into immutable assignment text before start | Current loader extension |
+| ADR-012 | Local macOS bootstrap and detached example supervisor | Current one-click setup |
 
 ## ADR-001 — CLI first with one control service
 
@@ -143,3 +144,18 @@ Compile the loaded text into the existing node `prompt` and add optional `prompt
 **Alternatives.** A structured prompt union or named registry adds authoring complexity without a current reuse requirement. Custom YAML tags tie tools to a custom loader. Reading at dispatch or retry weakens reproducibility.
 
 **Evidence.** See [file prompt validation](validation/prompt-file.md) for compatibility, error, snapshot, and runtime checks. Production qualification still follows ADR-008.
+
+
+## ADR-012 — Local bootstrap and detached example supervisor
+
+**Context.** An operator should be able to open the bundled examples without manually installing Node/Temporal or keeping the setup terminal open. A dashboard listening on a port is not evidence that a worker can execute work.
+
+**Decision.** Refine ADR-001/ADR-010 for the current local demo: `Setup Steward.command` invokes a repository-owned shell bootstrap, and `src/cli/setup.ts` owns example selection and readiness. On macOS the bootstrap may install missing prerequisites through the official Homebrew installer and `brew install node@22 temporal`; Homebrew retains its own administrator/confirmation flow. It does not install Codex credentials, configure ZeroTier, open firewall ports, or provision paid infrastructure. Linux uses preinstalled prerequisites.
+
+This supersedes the foreground-only launcher requirement for the one-click entrypoint: it starts the existing supervisor detached, with append-only local service logs. The manual launcher keeps its signal/shutdown behavior. Closing setup's terminal leaves its supervisor running; reboot stops it. Setup prints the supervisor PID. SIGTERM stops that supervisor and its owned children; it does not stop reused services. This is a local convenience, not the target independently installed system supervisor or a reboot-persistent service.
+
+Validate every catalog definition, demo-output schema, prompt file, and external input binding before service dispatch. Probe Temporal workflow/activity pollers and the dashboard health identity, rather than declaring readiness from an open TCP port. Check same-host poller PIDs to reject recent registrations left by exited workers. Reuse ready services; the existing fixed task queue and local-path assumptions remain and are not suitable for multiple unrelated checkouts sharing a server.
+
+A fresh workspace starts the question example in simulated mode. Repeated setup reconnects; named example launchers explicitly request a new run. Serialize setup and dependency installation. Record submission intent before the Temporal call and refuse an implicit retry after an uncertain response. This is not general durable start deduplication: the record is not completion evidence, and explicit `--new-run` requests may create another run. Temporal and committed outputs retain their existing authority under ADR-003/ADR-005.
+
+**Consequences.** Keep the database and all run artifacts across installation/restart. The selected example is submitted through the existing validated loader and Temporal client; a reused dashboard retains its existing Run-again configuration. One-click setup only supports the repository-local runtime/address and rejects custom runtime overrides. New simulated examples still require human answers at their declared gates. No Workflow/Activity scheduling semantics or replay contracts change. Clean-machine prerequisite installation and signed distribution remain separate release evidence; this change does not pass P2 on its own.

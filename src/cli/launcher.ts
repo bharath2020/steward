@@ -3,6 +3,7 @@ import { createWriteStream, mkdirSync } from "node:fs";
 import { createConnection } from "node:net";
 import { resolve } from "node:path";
 import { DASHBOARD_PORT } from "../config";
+import { workerReady, dashboardReady } from "./readiness";
 
 function canConnect(port: number): Promise<boolean> {
   return new Promise((done) => {
@@ -45,6 +46,7 @@ export async function main(argv = process.argv): Promise<void> {
   function launch(name: string, command: string, args: string[], restart = false): ChildProcess {
     const child = spawn(command, args, { cwd: process.cwd(), env: process.env, stdio: ["ignore", "pipe", "pipe"] });
     const log = createWriteStream(resolve(serviceDirectory, `${name}.log`), { flags: "a" });
+    child.once("error", (error) => { console.error(`${name}: ${error.message}`); log.end(); });
     child.stdout?.pipe(log);
     child.stderr?.pipe(log);
     child.once("exit", (code, signal) => {
@@ -84,12 +86,17 @@ export async function main(argv = process.argv): Promise<void> {
       ]);
     }
     await waitForPort(7233);
-    launch("worker", process.execPath, ["--import", "tsx", "src/worker.ts"], true);
+    if (!(await workerReady())) launch("worker", process.execPath, ["--import", "tsx", "src/worker.ts"], true);
     if (!(await canConnect(DASHBOARD_PORT))) {
       launch("dashboard", process.execPath, ["--import", "tsx", "src/server.ts"]);
     }
     await waitForPort(DASHBOARD_PORT);
-    await new Promise((done) => setTimeout(done, 1000));
+    const readyDeadline = Date.now() + 45_000;
+    while (!(await workerReady())) {
+      if (Date.now() > readyDeadline) throw new Error(`Worker did not become ready. See ${serviceDirectory}/worker.log`);
+      await new Promise((done) => setTimeout(done, 500));
+    }
+    if (!(await dashboardReady(DASHBOARD_PORT))) throw new Error(`Port ${DASHBOARD_PORT} is not a ready Steward dashboard for this Temporal address.`);
 
     if (!argv.includes("--no-start")) {
       const mode = argument(argv, "--mode", "simulated");

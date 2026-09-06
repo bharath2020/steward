@@ -50,6 +50,42 @@ For future changes, follow the vision and adopted decisions, use the technical d
 
 ## Run the demo
 
+### One-click macOS setup
+
+Download or clone this repository, then double-click **[Setup Steward.command](Setup%20Steward.command)** in Finder. It installs missing Node.js 22+ and Temporal through Homebrew (installing Homebrew when needed), checks dependencies, typechecks, validates all four examples, starts the local services in the background, and opens Steward Console. Initial Homebrew installation may require your administrator password and its own installation confirmation. A downloaded file may require Finder's **Open** action under macOS security settings.
+
+On a fresh workspace, setup starts the simulated multiple-choice example. On later launches it reconnects to saved runs. No Codex account is required. The service data stays in `runtime/temporal.db` and `runtime/runs/`; closing the setup window does not stop the background supervisor. Rebooting stops it; double-click Setup again to restart.
+
+To start a **new** example with one click, open a launcher in `examples/`:
+
+| Launcher | Example |
+|---|---|
+| [Run Questions.command](examples/Run%20Questions.command) | Two agents, four multiple-choice human gates, joined decision brief |
+| [Run Product Launch.command](examples/Run%20Product%20Launch.command) | Parallel specialists and a bounded quality loop |
+| [Run Privacy Launch.command](examples/Run%20Privacy%20Launch.command) | Human clarification before privacy launch research |
+| [Run File Prompt.command](examples/Run%20File%20Prompt.command) | A small agent assignment loaded from a Markdown file |
+
+These launchers use the simulated provider. They never answer human gates for you.
+
+Terminal equivalents:
+
+```bash
+npm run setup
+npm run setup -- --example questions --new-run
+npm run setup -- --example product --new-run
+npm run setup -- --example privacy --new-run
+npm run setup -- --example file --new-run
+npm run setup -- --check        # Install/check dependencies and validate; no services or runs
+```
+
+The shell entrypoint also works on Linux with Node.js 22+, npm, and Temporal already installed. Automatic prerequisite installation targets macOS. Homebrew follows its [official installer](https://brew.sh/); Temporal uses its [documented Homebrew installation](https://docs.temporal.io/cli/setup-cli).
+
+Logs are in `runtime/services/`; setup prints the supervisor PID when it starts one. To stop that supervisor and its owned services, send `kill -TERM <printed-pid>`. Services that were already running are reused and remain owned by their original launcher. An existing dashboard retains its configured **Run again** example; use the example launchers to choose another one. Setup binds locally and does not install/configure ZeroTier or expose a network interface. Custom `TEMPORAL_ADDRESS` or `YAMLFLOW_RUNTIME_DIR` profiles are rejected by this local setup flow.
+
+Concurrent clicks are serialized. If setup is force-killed during dependency installation, confirm it has stopped before removing the empty `runtime/services/bootstrap.lock` directory and retrying. A recorded but uncertain start in `runtime/services/setup-start.json` is not automatically resubmitted: inspect its Workflow ID in Temporal first. That file records submission intent, not accepted output or completion.
+
+### Manual setup
+
 Requires Node.js 22 or later and the [Temporal CLI](https://github.com/temporalio/cli#installation) on your PATH. The simulated demo needs no provider account. Real workers additionally require an authenticated Codex CLI.
 
 ```bash

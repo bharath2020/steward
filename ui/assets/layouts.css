@@ -33,43 +33,91 @@
   :root[data-layout="review"] .workspace { grid-template-columns: 160px minmax(280px, 1fr) minmax(280px, 0.85fr); }
 }
 
-@media (max-width: 1000px) {
-  .topbar { height: 126px; grid-template-columns: 1fr auto; gap: 12px; padding-block: 12px; }
-  .run-summary { justify-content: end; }
+/* Content sizes the toolbar; the workspace consumes the remaining viewport. */
+body { height: 100dvh; display: flex; flex-direction: column; }
+.topbar { flex: 0 0 auto; }
+.workspace { flex: 1; height: auto; }
+.workspace > *, .topbar > * { min-width: 0; }
+.toast { max-width: calc(100% - 36px); overflow-wrap: anywhere; bottom: max(18px, env(safe-area-inset-bottom)); }
+
+/* Tablet portrait and landscape: compact history strip, two useful work columns. */
+@media (min-width: 700px) and (max-width: 1180px) {
+  body { height: auto; min-height: 100dvh; overflow: auto; }
+  .topbar { height: auto; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; padding: 14px 18px; position: static; }
+  .run-summary { display: flex; justify-content: end; }
   .appearance-controls { border: 0; padding: 0; }
   .run-controls { justify-content: end; }
-  .workspace { height: calc(100vh - 126px); }
+  .run-controls label { display: grid; }
+  .workspace, :root[data-layout="board"] .workspace, :root[data-layout="review"] .workspace {
+    display: grid; flex: none; height: auto;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.7fr);
+    grid-template-rows: auto minmax(460px, 62dvh) 260px;
+    grid-template-areas: "runs runs" "graph inspector" "timeline timeline";
+  }
+  :root[data-layout="review"] .workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(360px, 45dvh) minmax(360px, 48dvh);
+    grid-template-areas: "runs runs" "graph graph" "inspector timeline";
+  }
+  .graph-panel, :root[data-layout="review"] .graph-panel { height: auto; }
+  .inspector, :root[data-layout="review"] .inspector { border: 0; border-left: 1px solid var(--line); overflow: auto; }
+  .timeline-panel { display: grid; height: auto; grid-template-columns: 180px minmax(0, 1fr); }
+  .timeline-heading { display: flex; }
+  .timeline { height: auto; }
+  .timeline-meta { display: grid; }
 }
 
-@media (max-width: 840px) {
-  .topbar { position: static; height: auto; }
-  .run-summary { display: flex; }
-  .appearance-controls { grid-column: 1; }
-  .run-controls { grid-column: 2; }
-  .workspace, :root[data-layout="review"] .workspace { display: flex; height: auto; }
-  .run-rail { flex-shrink: 0; }
-  .graph-panel, :root[data-layout="review"] .graph-panel { height: 540px; flex-shrink: 0; }
-  :root[data-layout="review"] .inspector { border-right: 0; }
-  :root[data-layout="review"] .timeline-panel { height: 360px; flex-shrink: 0; }
-  :root[data-layout="review"] .timeline-heading { display: flex; }
-  :root[data-layout="review"] .timeline-meta { display: none; }
-  :root[data-layout="review"] .timeline { height: auto; }
+@media (max-width: 1180px) {
+  .run-rail { padding: 12px 16px; max-height: none; border-right: 0; border-bottom: 1px solid var(--line); }
+  .run-rail .section-heading { align-items: center; }
+  .run-rail .section-heading > div { display: flex; align-items: baseline; gap: 10px; }
+  .run-rail .section-heading h2 { margin: 0; font-size: 15px; }
+  .run-list { flex-direction: row; gap: 8px; margin-top: 10px; }
+  .run-item { flex: 0 0 180px; width: 180px; padding: 10px; border: 1px solid var(--line); }
+  .durable-note { display: none; }
+  .legend { padding-inline: 16px; }
   .legend-rule { display: none !important; }
 }
 
-@media (max-width: 440px) {
-  .topbar { gap: 10px 8px; }
+/* Phone and narrow iPad Split View keep every operator control accessible. */
+@media (max-width: 699px) {
+  body { height: auto; min-height: 100dvh; overflow: auto; }
+  .topbar { position: static; height: auto; grid-template-columns: minmax(0, 1fr) auto; gap: 14px 12px; padding: 12px max(12px, env(safe-area-inset-right)) 12px max(12px, env(safe-area-inset-left)); }
   .brand-block { gap: 8px; }
   .brand-block span:last-child { font-size: 10px; }
-  .appearance-controls { gap: 6px; }
-  .appearance-controls select { min-width: 80px; padding-left: 8px; padding-right: 22px; }
-  .primary-button { padding-left: 10px; padding-right: 10px; gap: 8px; }
+  .run-summary { display: flex; justify-content: end; }
+  .connection { font-size: 10px; letter-spacing: 0.04em; }
+  .appearance-controls { grid-column: 1 / -1; border: 0; padding: 0; }
+  .appearance-controls label { flex: 1; min-width: 0; }
+  .appearance-controls select { width: 100%; min-width: 0; }
+  .run-controls { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+  .run-controls label { display: grid; min-width: 0; }
+  .run-controls select { min-width: 0; width: 100%; }
+  .primary-button { padding-inline: 12px; }
   .primary-button kbd { display: none; }
+  .workspace, :root[data-layout="board"] .workspace, :root[data-layout="review"] .workspace { display: flex; flex-direction: column; height: auto; flex: none; }
+  .graph-panel, :root[data-layout="review"] .graph-panel { height: clamp(360px, 65dvh, 560px); flex: none; }
+  .graph-toolbar, :root[data-layout="review"] .graph-toolbar { padding: 14px 16px; }
+  .graph-tools { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .graph-tools .definition-meta { font-size: 10px; max-width: 40%; }
+  .inspector, :root[data-layout="review"] .inspector { border: 0; border-top: 1px solid var(--line); padding: 16px; overflow: visible; }
+  .inspector-heading { top: 0; padding-top: 0; position: static; }
+  .timeline-panel, :root[data-layout="review"] .timeline-panel { display: flex; flex-direction: column; height: 320px; flex: none; border-top: 1px solid var(--line); }
+  .timeline-heading, :root[data-layout="review"] .timeline-heading { display: flex; flex-direction: row; padding: 16px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .timeline-heading h2 { max-width: none; }
+  .timeline-meta { display: none; }
+  .timeline, :root[data-layout="review"] .timeline { flex: 1; min-height: 0; height: auto; padding: 16px; }
+  .workspace { padding-bottom: env(safe-area-inset-bottom); }
 }
 
-@media (max-width: 600px) {
-  .graph-toolbar { padding: 14px 16px; }
-  .graph-tools { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .graph-tools .definition-meta { font-size: 10px; max-width: 45%; }
-  .graph-view-controls button { min-height: 36px; }
+@media (pointer: coarse), (max-width: 1180px) {
+  select, .primary-button, .recovery-button, .graph-view-controls button { min-height: 44px; }
+  .graph-view-controls button { min-width: 44px; }
+  select, .human-input-panel textarea { font-size: 16px; }
+}
+
+/* Short desktop windows can scroll instead of clipping minimum-height panels. */
+@media (min-width: 1181px) and (max-height: 760px) {
+  body { height: auto; min-height: 100dvh; overflow: auto; }
+  .workspace { flex: none; min-height: 680px; }
 }
