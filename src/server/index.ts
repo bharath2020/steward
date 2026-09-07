@@ -7,6 +7,7 @@ import { DASHBOARD_PORT } from "../config";
 import type { AgentProvider, AgentRecoveryAction, JsonValue, RunState, WorkflowDefinition } from "../contracts";
 import { loadInitialInput, loadWorkflow } from "../definition";
 import { readAgentMessages, readEvents, runDirectory, runtimeRoot } from "../store";
+import { createWorkflowDraft, type AuthoringRunner } from "../authoring";
 
 const workflowPath = process.env.YAMLFLOW_WORKFLOW ?? "workflows/product-launch.yaml";
 const inputPath = process.env.YAMLFLOW_INPUT ?? "examples/product-input.json";
@@ -77,9 +78,14 @@ function json(response: ServerResponse, status: number, value: unknown): void {
   response.end(JSON.stringify(value));
 }
 
-async function body(request: IncomingMessage): Promise<Record<string, unknown>> {
+async function body(request: IncomingMessage, maximumBytes = 1_000_000): Promise<Record<string, unknown>> {
   let source = "";
-  for await (const chunk of request) source += chunk.toString();
+  let bytes = 0;
+  for await (const chunk of request) {
+    bytes += Buffer.byteLength(chunk);
+    if (bytes > maximumBytes) throw new Error(`request body exceeds ${maximumBytes} bytes`);
+    source += chunk.toString();
+  }
   return source ? (JSON.parse(source) as Record<string, unknown>) : {};
 }
 
@@ -99,7 +105,19 @@ async function serveStatic(pathname: string, response: ServerResponse): Promise<
   response.end(asset.body);
 }
 
-async function handler(request: IncomingMessage, response: ServerResponse): Promise<void> {
+function isLocalAuthoringRequest(request: IncomingMessage): boolean {
+  const origin = request.headers.origin;
+  if (!origin) return true;
+  try {
+    const value = new URL(origin);
+    return (value.hostname === "127.0.0.1" || value.hostname === "localhost")
+      && Number(value.port || (value.protocol === "https:" ? 443 : 80)) === DASHBOARD_PORT;
+  } catch {
+    return false;
+  }
+}
+
+async function handler(request: IncomingMessage, response: ServerResponse, authoringRunner?: AuthoringRunner): Promise<void> {
   const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "127.0.0.1"}`);
   if (request.method === "GET" && url.pathname === "/health") {
     let durableStore = false;
@@ -135,6 +153,19 @@ async function handler(request: IncomingMessage, response: ServerResponse): Prom
     await push();
     const timer = setInterval(push, 700);
     request.on("close", () => clearInterval(timer));
+    return;
+  }
+  if (request.method === "GET" && url.pathname === "/api/authoring/providers") {
+    json(response, 200, { providers: ["codex", "claude"], policy: "read-only", persistence: "browser-session" });
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/authoring/chat") {
+    if (!isLocalAuthoringRequest(request)) {
+      json(response, 403, { error: "Workflow authoring is restricted to this local Steward Console" });
+      return;
+    }
+    const draft = await createWorkflowDraft(await body(request, 150_000), authoringRunner);
+    json(response, 200, draft);
     return;
   }
   if (request.method === "POST" && url.pathname === "/api/runs") {
@@ -203,9 +234,19 @@ async function handler(request: IncomingMessage, response: ServerResponse): Prom
   await serveStatic(url.pathname, response);
 }
 
-export function createDashboardServer() {
+export function createDashboardServer(options: { authoringRunner?: AuthoringRunner } = {}) {
   return createServer((request, response) => {
-    handler(request, response).catch((error) => json(response, 500, { error: String(error) }));
+    handler(request, response, options.authoringRunner).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      const status = message.startsWith("request body")
+        || message.startsWith("provider must")
+        || message.startsWith("message must")
+        || message.startsWith("message exceeds")
+        || message.startsWith("history")
+        || message.startsWith("currentYaml")
+        || message.startsWith("Invalid workflow:") ? 400 : 500;
+      json(response, status, { error: message });
+    });
   });
 }
 

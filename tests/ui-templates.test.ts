@@ -55,6 +55,8 @@ test("dashboard composition preserves each application mount point exactly once"
     "run-count", "run-list", "graph-title", "workflow-file", "definition-hash", "graph-shell", "graph", "empty-state",
     "inspector-title", "inspector-status", "inspector-content", "timeline-title", "event-count", "durable-path",
     "timeline", "toast", "layout-select", "theme-select",
+    "workspace-observe", "workspace-author", "authoring-title", "authoring-status", "authoring-messages",
+    "authoring-form", "authoring-prompt", "authoring-provider", "authoring-send",
   ];
   for (const id of requiredIds) {
     assert.equal(ids.filter((candidate) => candidate === id).length, 1, `${id} must appear exactly once`);
@@ -62,6 +64,7 @@ test("dashboard composition preserves each application mount point exactly once"
   assert.doesNotMatch(html, /\{\{[\s\S]*?\}\}/, "template placeholders must be resolved");
   assert.match(html, /<script\b[^>]*\bsrc=["']\/appearance\.js["']/);
   assert.match(html, /<script\b[^>]*\bsrc=["']\/app\.js["']/);
+  assert.match(html, /<script\b[^>]*\bsrc=["']\/authoring\.js["']/);
   for (const [id, options] of [
     ["layout-select", ["board", "review"]],
     ["theme-select", ["dark", "light", "system"]],
@@ -78,6 +81,7 @@ test("UI asset lookup serves only the explicit public asset allowlist", async ()
     ["/graph-layout.js", /^(?:application|text)\/javascript\b/],
     ["/human-input.js", /^(?:application|text)\/javascript\b/],
     ["/appearance.js", /^(?:application|text)\/javascript\b/],
+    ["/authoring.js", /^(?:application|text)\/javascript\b/],
     ["/styles.css", /^text\/css\b/],
     ["/themes.css", /^text\/css\b/],
     ["/layouts.css", /^text\/css\b/],

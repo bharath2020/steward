@@ -3,12 +3,13 @@ import { resolve } from "node:path";
 
 // UI resources belong to the application, independently of the run's cwd.
 const uiRoot = resolve(__dirname, "../../ui");
-const components = ["toolbar", "runs", "graph", "inspector", "timeline"] as const;
+const components = ["toolbar", "authoring", "runs", "graph", "inspector", "timeline"] as const;
 const assets: Readonly<Record<string, { file: string; contentType: string }>> = {
   "/app.js": { file: "app.js", contentType: "text/javascript; charset=utf-8" },
   "/graph-layout.js": { file: "graph-layout.js", contentType: "text/javascript; charset=utf-8" },
   "/human-input.js": { file: "human-input.js", contentType: "text/javascript; charset=utf-8" },
   "/appearance.js": { file: "appearance.js", contentType: "text/javascript; charset=utf-8" },
+  "/authoring.js": { file: "authoring.js", contentType: "text/javascript; charset=utf-8" },
   "/styles.css": { file: "styles.css", contentType: "text/css; charset=utf-8" },
   "/themes.css": { file: "themes.css", contentType: "text/css; charset=utf-8" },
   "/layouts.css": { file: "layouts.css", contentType: "text/css; charset=utf-8" },

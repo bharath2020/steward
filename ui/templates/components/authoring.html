@@ -1,0 +1,29 @@
+      <aside class="authoring-panel" aria-labelledby="authoring-title">
+        <div class="authoring-heading">
+          <div>
+            <span class="eyebrow">Workflow author</span>
+            <h2 id="authoring-title">Build with an agent</h2>
+          </div>
+          <span id="authoring-status" class="authoring-status">Ready</span>
+        </div>
+        <div id="authoring-messages" class="authoring-messages" role="log" aria-live="polite">
+          <article class="authoring-message assistant">
+            <span>Steward</span>
+            <p>Describe the outcome, parallel work, human decisions, and final deliverable. I’ll turn it into validated workflow YAML and preview the graph.</p>
+          </article>
+        </div>
+        <form id="authoring-form" class="authoring-form">
+          <label for="authoring-prompt">Describe or revise the workflow</label>
+          <textarea id="authoring-prompt" rows="4" maxlength="12000" placeholder="Review a release with product and technical agents in parallel, ask me for approval, then produce a launch decision."></textarea>
+          <div class="authoring-actions">
+            <label for="authoring-provider">Agent
+              <select id="authoring-provider">
+                <option value="codex">Codex</option>
+                <option value="claude">Claude Code</option>
+              </select>
+            </label>
+            <button id="authoring-send" class="primary-button" type="submit"><span>Generate</span><kbd>⌘↵</kbd></button>
+          </div>
+          <p class="authoring-policy">Read-only agent · YAML is parsed before preview · chatting never starts a run</p>
+        </form>
+      </aside>

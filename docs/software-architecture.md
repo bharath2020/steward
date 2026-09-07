@@ -6,7 +6,7 @@ The user outcome is a workflow system whose behavior can change without duplicat
 
 Use one TypeScript package with explicit modules. Run the client, worker, optional dashboard, and projection publisher as independently supervised roles. A module is a code boundary, not a requirement for a separate server.
 
-The current implementation has Steward CLI modules in `src/cli/`, Steward Server HTTP and template adapters in `src/server/`, and Steward Console browser code/templates in `ui/`. Root compatibility entrypoints preserve existing npm commands. The Temporal worker and flat legacy runtime modules remain in place. This establishes presentation and entrypoint boundaries; it does not establish the target control, execution, commit, store, or projection interfaces below. Approved display branding preserves existing `YAMLFLOW_*` settings and lowercase runtime/schema identities, as recorded in ADR-010.
+The current implementation has Steward CLI modules in `src/cli/`, Steward Server HTTP and template adapters in `src/server/`, agent-assisted V1 draft mediation in `src/authoring.ts`, and Steward Console browser code/templates in `ui/`. Root compatibility entrypoints preserve existing npm commands. The authoring mediator returns only parser-accepted preview data and cannot start a run. The Temporal worker and flat legacy runtime modules remain in place. This establishes presentation and entrypoint boundaries; it does not establish the target control, execution, commit, store, or projection interfaces below. Approved display branding preserves existing `YAMLFLOW_*` settings and lowercase runtime/schema identities, as recorded in ADR-010 and ADR-013.
 
 ## Responsibility overview
 

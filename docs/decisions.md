@@ -18,6 +18,7 @@ This register records choices made for the production direction. It does not ass
 | ADR-010 | One repository with CLI, server, and UI template boundaries | Current component extraction; broader control services remain planned |
 | ADR-011 | V1 file prompts resolve into immutable assignment text before start | Current loader extension |
 | ADR-012 | Local macOS bootstrap and detached example supervisor | Current one-click setup |
+| ADR-013 | Agent-assisted V1 authoring is validated preview data, not execution authority | Current Console builder |
 
 ## ADR-001 — CLI first with one control service
 
@@ -172,3 +173,13 @@ to the terminal when launched through a pipe. `STEWARD_INSTALL_DIR` and
 `STEWARD_REF` allow an explicit destination and source revision. This extends the
 installation entrypoint only; runtime authority, local-only binding, credentials,
 and the reboot boundary remain unchanged.
+
+## ADR-013 — Agent-assisted authoring stays outside execution authority
+
+**Context.** Authors need to describe a workflow conversationally, see its topology immediately, and refine it without manually translating every dependency into YAML. Letting model output bypass the existing loader or start a run would turn presentation text into execution authority. Adding Claude Code for authoring also expands the local provider boundary beyond the current simulated/Codex execution providers.
+
+**Decision.** Add a Build workspace to Steward Console with chat on the left and the shared SVG topology on the right. A loopback Steward Server endpoint accepts a bounded message, up to twelve bounded browser-session history messages, an optional current draft, and an explicit authoring provider (`codex` or `claude`). The provider must return `{reply, workflow_yaml}` through a structured-output schema. Steward runs `workflow_yaml` through the existing V1 `parseWorkflow` implementation and permits one bounded repair pass using the parser diagnostic. Only a parser-accepted definition is returned to the browser or rendered.
+
+Authoring providers run as local subprocesses with non-interactive, no-write permission settings and a two-minute timeout. They receive the V1 authoring contract as data and cannot extend it. Generated drafts use inline prompts only. The authoring endpoint rejects browser origins outside the same loopback Console. Chat and YAML remain browser-session preview data: no files are written, no durable command is recorded, and no Temporal Workflow is started. A preview uses synthetic pending presentation state and must never be reported as a run.
+
+**Consequences.** This implements the authoring experience anticipated by the vision while preserving ADR-002, ADR-003, ADR-006, ADR-009, and ADR-010. Codex and Claude Code authentication remains owned by their installed local CLIs; absence or failure is explicit. The current loopback endpoint still lacks the target local session credential and therefore does not pass the P2 control-security gate. Persisting drafts, editing YAML directly, generating example input, and starting a generated draft require later explicit commands and contracts rather than being inferred from chat.

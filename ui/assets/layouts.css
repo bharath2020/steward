@@ -108,6 +108,11 @@ body { height: 100dvh; display: flex; flex-direction: column; }
   .timeline-meta { display: none; }
   .timeline, :root[data-layout="review"] .timeline { flex: 1; min-height: 0; height: auto; padding: 16px; }
   .workspace { padding-bottom: env(safe-area-inset-bottom); }
+  .brand-block { flex-wrap: wrap; }
+  .workspace-switcher { order: 3; width: 100%; margin: 4px 0 0 42px; padding-left: 0; border-left: 0; }
+  :root[data-workspace="author"] .workspace { display: flex; flex-direction: column; }
+  :root[data-workspace="author"] .authoring-panel { display: grid; min-height: 520px; border-right: 0; border-bottom: 1px solid var(--line); }
+  :root[data-workspace="author"] .graph-panel { height: clamp(420px, 70dvh, 620px); }
 }
 
 @media (pointer: coarse), (max-width: 1180px) {

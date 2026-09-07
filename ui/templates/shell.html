@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-layout="board" data-theme="dark">
+<html lang="en" data-layout="board" data-theme="dark" data-workspace="observe">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -16,6 +16,8 @@
     {{> toolbar}}
 
     <main class="workspace">
+    {{> authoring}}
+
     {{> runs}}
 
     {{> graph}}
@@ -29,5 +31,6 @@
     <script src="/graph-layout.js"></script>
     <script src="/human-input.js"></script>
     <script src="/app.js"></script>
+    <script src="/authoring.js"></script>
   </body>
 </html>

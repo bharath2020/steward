@@ -8,13 +8,14 @@ Steward Console is the browser UI served by Steward Server, alongside the separa
 |---|---|
 | `brand.json` | Approved Steward display name, tagline, and page description. |
 | `templates/shell.html` | The shared document and component slots. |
-| `templates/components/` | Toolbar, run navigation, graph, inspector, and timeline markup. |
+| `templates/components/` | Toolbar, authoring chat, run navigation, graph, inspector, and timeline markup. |
 | `assets/layouts.css` | Board and Review composition plus responsive behavior. |
 | `assets/themes.css` | Semantic color tokens and shared component theme rules. |
 | `assets/styles.css` | Base component styling and restrained motion. |
 | `assets/appearance.js` | Browser preferences, system-theme resolution, and keyboard policy. |
 | `assets/graph-layout.js` | Measured text wrapping, dependency layers, and graph node geometry. |
 | `assets/human-input.js` | Choice-question presentation, accessible answer controls, and answer serialization. |
+| `assets/authoring.js` | Browser-session authoring conversation, provider selection, and accepted-draft handoff. |
 | `assets/app.js` | Shared snapshots, graph, inspector, timeline, and operator actions. |
 | `assets/icon.png` | Generated project mark, shared by the header, favicon, and README. |
 
@@ -44,6 +45,14 @@ Touch pointers and widths up to 1180 pixels receive 44-pixel control targets and
 units follow browser chrome. Wide graphs and run history scroll within their panels.
 Resizing uses the same mounted components and does not replace answer drafts.
 
+## Workflow builder
+
+The toolbar switches between **Observe** and **Build** without reconnecting or changing a run. Build uses a chat rail beside the shared SVG graph on desktop and stacks chat above graph below 700 CSS pixels. Choose Codex or Claude Code, describe the intended nodes/dependencies/human decisions, and submit with the button or Command/Control-Enter.
+
+The server supplies the V1 contract and current accepted draft to a bounded, read-only provider subprocess. Provider output is parsed as structured `{reply, workflow_yaml}` data. `parseWorkflow` must accept the YAML before the browser receives it; one parser-diagnostic repair attempt is allowed. The last valid graph remains in place when a later revision fails. Accepted responses include an expandable exact YAML view.
+
+Conversation and YAML are scoped to the current page and are not durable evidence. Build previews use pending node presentation and cannot start a run, write a file, or represent execution status. The authoring endpoint accepts only the local Console browser origin. These boundaries are recorded in ADR-013.
+
 Validation on 2026-09-06: typecheck and all 48 existing tests passed (tests used
 `node --import tsx --test tests/*.test.ts` because the sandbox blocked the tsx CLI
 IPC socket). Chromium measurements found no page horizontal overflow in Board or
@@ -68,7 +77,7 @@ npm run verify
 npm run dashboard
 ```
 
-The dashboard command starts only Steward Server and serves Steward Console. It can display retained run artifacts without starting a new workflow. Browser verification should cover both layouts and themes, mobile width, appearance persistence after reload, and unsent input surviving a switch. Typing `r` in an editable field must not create a run.
+The dashboard command starts only Steward Server and serves Steward Console. It can display retained run artifacts without starting a new workflow. Browser verification should cover both layouts and themes, mobile width, appearance persistence after reload, and unsent input surviving a switch. Builder verification additionally covers provider selection, waiting feedback, valid SVG replacement, rejected-draft retention, and expandable YAML. Typing `r` in an editable field must not create a run.
 
 The approved display name preserves compatibility with existing `YAMLFLOW_*` settings, `yamlflow-` workflow IDs, Temporal task queue/workflow types, and schema identities. Console preferences retain the `agent-workflow:appearance:v1` browser storage key.
 

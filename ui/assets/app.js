@@ -4,6 +4,7 @@ const ui = Object.fromEntries([
   "connection", "summary-completed", "summary-wave", "summary-elapsed", "mode", "pace", "run-again",
   "run-count", "run-list", "graph-title", "workflow-file", "definition-hash", "graph", "empty-state",
   "inspector-title", "inspector-status", "inspector-content", "event-count", "durable-path", "timeline", "toast",
+  "workspace-observe", "workspace-author",
 ].map((id) => [id, document.getElementById(id)]));
 
 let current = null;
@@ -23,6 +24,8 @@ const graphLoops = new Map();
 let graphGeometry = null;
 let graphZoomMode = "auto";
 let graphScale = 1;
+let workspaceMode = "observe";
+let authoringDraft = null;
 const graphMeasureContext = document.createElement("canvas").getContext("2d");
 
 function graphTextMeasure(className) {
@@ -604,6 +607,7 @@ function renderTimeline(events = [], runId) {
 function render(snapshot) {
   current = snapshot;
   renderRuns(snapshot?.runs);
+  if (workspaceMode === "author") return;
   const run = snapshot?.run;
   const definition = snapshot?.definition;
   if (!run) {
@@ -624,6 +628,60 @@ function render(snapshot) {
   renderInspector(snapshot);
   renderTimeline(snapshot.events, run.runId);
 }
+
+function draftRun(definition) {
+  return {
+    runId: `draft:${definition.definitionHash}`,
+    status: "draft",
+    completedCount: 0,
+    totalCount: definition.nodes.length,
+    currentWave: 0,
+    nodes: Object.fromEntries(definition.nodes.map((node) => [node.id, {
+      id: node.id,
+      status: "pending",
+      phase: node.kind === "human" ? "Human decision" : "Ready to start",
+      agent: node.agent,
+      iteration: 0,
+      iterationCount: 0,
+    }])),
+  };
+}
+
+function showAuthoringDraft(draft) {
+  authoringDraft = draft;
+  if (workspaceMode !== "author") return;
+  selectedNodeId = null;
+  renderedGraphKey = null;
+  text(ui["graph-title"], draft.definition.name);
+  text(ui["workflow-file"], "generated-workflow.yaml");
+  text(ui["definition-hash"], draft.definition.definitionHash.slice(0, 12));
+  text(ui["summary-completed"], `0 / ${draft.definition.nodes.length}`);
+  text(ui["summary-wave"], "draft");
+  text(ui["summary-elapsed"], "—");
+  renderGraph(draft.definition, draftRun(draft.definition));
+}
+
+function setWorkspaceMode(mode) {
+  workspaceMode = mode === "author" ? "author" : "observe";
+  document.documentElement.dataset.workspace = workspaceMode;
+  ui["workspace-observe"].setAttribute("aria-pressed", String(workspaceMode === "observe"));
+  ui["workspace-author"].setAttribute("aria-pressed", String(workspaceMode === "author"));
+  if (workspaceMode === "author") {
+    if (authoringDraft) showAuthoringDraft(authoringDraft);
+    else {
+      renderGraph(null, null);
+      text(ui["graph-title"], "Describe a workflow to begin");
+      text(ui["workflow-file"], "generated-workflow.yaml");
+      text(ui["definition-hash"], "not validated");
+    }
+  } else render(current);
+  requestAnimationFrame(sizeGraph);
+  window.dispatchEvent(new CustomEvent("workspacechange", { detail: { mode: workspaceMode } }));
+}
+
+ui["workspace-observe"].addEventListener("click", () => setWorkspaceMode("observe"));
+ui["workspace-author"].addEventListener("click", () => setWorkspaceMode("author"));
+window.StewardConsole = { showAuthoringDraft, setWorkspaceMode };
 
 function setConnection(status) {
   ui.connection.className = `connection ${status}`;

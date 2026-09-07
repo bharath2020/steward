@@ -25,12 +25,14 @@ One repository contains distinct components with shared execution contracts:
 |---|---|---|
 | **Steward CLI** | [`src/cli/`](src/cli/) | Start runs, submit human answers, and supervise the local demo stack. |
 | **Steward Server** | [`src/server/`](src/server/) | HTTP commands, run snapshots, SSE, and UI template composition. |
-| **Steward Console** | [`ui/`](ui/) | Server UI with shared templates, selectable layouts/themes, and browser interactions. |
+| **Steward Console** | [`ui/`](ui/) | Observe durable runs or build parser-validated V1 workflows through Codex/Claude chat and a live SVG preview. |
 | Worker and runtime | [`src/worker.ts`](src/worker.ts), [`src/workflows.ts`](src/workflows.ts), [`src/activities.ts`](src/activities.ts) | Durable execution, provider work, and output acceptance. |
 
 The CLI uses the Temporal client directly. The browser uses the server. Both reach the same runtime. The existing root entry points remain compatible with all commands below.
 
 Select **Board** for graph-focused operation or **Review** for a larger output inspector and vertical timeline. Choose **Dark**, **Light**, or **System** independently. Preferences stay in the browser; switching appearance preserves the selected run, selected node, and unsent answer. See [UI templates](ui/README.md) to customize components and theme tokens.
+
+Select **Build** to describe a workflow to an installed, authenticated Codex or Claude Code CLI. Steward supplies the current V1 language contract, requests structured YAML, validates it with the same parser used before durable starts, and renders only an accepted draft in the SVG topology. A parser error gets one bounded repair attempt. Expand **View validated YAML** in the chat to review the exact source. Drafts remain in that browser session, providers run without write permission, and chatting never creates a Temporal run or writes a workflow file.
 
 ## Product direction and design
 
