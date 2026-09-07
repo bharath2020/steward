@@ -20,6 +20,8 @@
   ],
   "description": "Durable agent workflows with a CLI, server, and customizable console. Powered by Temporal and Codex.",
   "scripts": {
+    "skill:install": "node scripts/install-skill.mjs",
+    "validate:workflow": "node --import tsx scripts/validate-workflow.ts",
     "setup": "bash scripts/setup.sh",
     "build": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",

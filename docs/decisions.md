@@ -23,6 +23,19 @@ This register records choices made for the production direction. It does not ass
 | ADR-015 | Explicit bounded array fan-out | Current runtime |
 | ADR-016 | Pre-adoption runtime has one current interpreter and no compatibility shims | Current runtime |
 | ADR-017 | Repeat archive installation updates source and restarts owned services | Current installer correction |
+| ADR-018 | Portable V1 authoring skill and offline loader validation | Current authoring distribution |
+
+## ADR-018 — Portable V1 authoring skill
+
+**Context.** Authors want to describe workflows to their own agent and receive usable YAML without requiring the Console authoring endpoint.
+
+**Decision.** Distribute `skills/steward-workflow` with the implemented V1 schema guide and example YAML/input pairs. Add `npm run skill:install` for Codex, `--agent claude`, and an explicit `--dest` skills directory for other agents. The installer copies the bundled skill and refuses existing destinations. Add `npm run validate:workflow -- workflow.yaml [input.json]` as an offline adapter over `loadWorkflow`, `loadInitialInput`, and initial-input resolution. It does not import lifecycle, provider, or Temporal clients.
+
+The explicitly requested local authoring operation may write YAML, prompt files, and example input to the user's workspace. This extends the authoring delivery surface under ADR-013; its Console-specific no-write subprocess boundary remains unchanged. Neither skill installation nor validation starts a workflow, installs providers, or modifies execution permissions. Any agent can author; supported execution providers remain unchanged.
+
+**Consequences.** Packaging/scripts own installation; spec/compiler remains owned by `src/definition.ts` under ADR-009. The guide describes current behavior rather than creating another normative schema or changing V1 semantics. Parser acceptance is reported separately from exhaustive reference validation, which remains future work. This delivers a V1 authoring aid early; it does not pass the P4 nested-language or P2 distribution gates. Tests exercise bundled examples, validation failures, portable installation, and overwrite refusal.
+
+The standard setup path (including archive installation) invokes the skill installer with `--if-missing`. It installs for Codex by default; `STEWARD_SKILL_AGENT` selects `codex`, `claude`, `both`, or `none`. Repeat setup preserves existing skills and their customizations with an explicit refresh message. Standalone installation retains overwrite refusal. This extends ADR-012's bootstrap contents without changing runtime authority.
 
 ## ADR-001 — CLI first with one control service
 

@@ -34,6 +34,30 @@ Select **Board** for graph-focused operation or **Review** for a larger output i
 
 Select **Build** to describe a workflow to an installed, authenticated Codex or Claude Code CLI. Steward supplies the current V1 language contract, requests structured YAML, validates it with the same parser used before durable starts, and renders only an accepted draft in the SVG topology. A parser error gets one bounded repair attempt. Expand **View validated YAML** in the chat to review the exact source. Drafts remain in that browser session, providers run without write permission, and chatting never creates a Temporal run or writes a workflow file.
 
+## Create YAML with your own agent
+
+The standard installer and `npm run setup` install the bundled [Steward workflow skill](skills/steward-workflow/SKILL.md) for Codex automatically. Set `STEWARD_SKILL_AGENT=claude`, `both`, or `none` in the setup/installer environment to select another target or opt out. Repeated setup preserves an existing skill, including local customizations, and prints how to refresh it. When using the piped installer, set the variable on `bash`, for example `curl -fsSL https://raw.githubusercontent.com/bharath2020/steward/main/install.sh | STEWARD_SKILL_AGENT=both bash`.
+
+To install the skill separately from a Steward checkout or downloaded installation (Node.js 22+):
+
+```sh
+npm run skill:install
+```
+
+This installs `steward-workflow` into `${CODEX_HOME:-~/.codex}/skills`. It is available on your next Codex turn. For Claude Code use `npm run skill:install -- --agent claude`; for another agent use `npm run skill:install -- --dest /absolute/path/to/skills`, or give the agent the bundled `SKILL.md` directly. Installation needs no runtime services or npm dependencies and refuses to overwrite an existing skill. Keep the whole skill directory so its references and examples remain available.
+
+Ask your agent:
+
+> Use $steward-workflow to create a workflow that reviews a proposal from two perspectives, asks me to choose a direction, and produces a summary. Save workflow.yaml and input.json. Validate them without starting a run.
+
+The skill covers the implemented V1 schema, human questions, loops, and array fan-out. Any agent can author the YAML; execution providers remain `codex` and `simulated`. With Steward dependencies installed, validate files independently:
+
+```sh
+npm run validate:workflow -- /absolute/path/to/workflow.yaml /absolute/path/to/input.json
+```
+
+Validation uses the same file-aware loader as runtime starts, checks supplied initial-input references, and does not start Temporal or an agent. It does not exhaustively check node-output references or nested object shapes. The schema guide calls out those manual checks. Installation and validation details are covered by [ADR-018](docs/decisions.md#adr-018--portable-v1-authoring-skill).
+
 ## Product direction and design
 
 Steward is moving toward an installable developer CLI, followed by a production deployment for one trusted team. The repository currently implements the demo; the documents below define the target and its release gates.

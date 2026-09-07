@@ -1,0 +1,23 @@
+version: 1
+name: Bounded refinement
+defaults:
+  provider: simulated
+nodes:
+  refine:
+    prompt: Refine the supplied brief, using previous_output when present. Return text and ready indicating whether it covers the audience and outcome.
+    inputs:
+      brief: $input.brief
+    outputs:
+      text: string
+      ready: boolean
+    loop:
+      max_iterations: 3
+      carry_as: previous_output
+      until:
+        path: ready
+        operator: equals
+        value: true
+      on_exhaustion: fail
+    demo_outputs:
+      - {text: A review queue., ready: false}
+      - {text: A shared queue helps reviewers track pending work., ready: true}

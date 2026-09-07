@@ -20,6 +20,8 @@ Each phase produces a usable vertical slice and retained evidence. Owner labels 
 
 P4 can be explored independently after P1 contracts settle, but is not a prerequisite for qualifying the existing workflow model. Multi-tenant hosting, writable executors, new provider integrations, and a marketplace need separate decisions and gates.
 
+The portable V1 authoring skill (ADR-018) is available ahead of P4 with current-language examples and offline loader validation. It does not implement the proposed nested language or establish that the P2/P4 release gates pass.
+
 ## First implementation slice
 
 Start with a human-input workflow and one simulated agent consuming its answer. Add a versioned shared commit path, a final result manifest, and reconciliation that distinguishes accepted output from Temporal completion. Prove worker restart after answer acceptance, projection deletion, and duplicate answer submission on the current Workflow type.

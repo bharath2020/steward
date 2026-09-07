@@ -1,0 +1,46 @@
+version: 1
+name: Review and decide
+defaults:
+  provider: simulated
+  max_parallelism: 2
+nodes:
+  benefits:
+    prompt: Identify the main benefits of the supplied proposal. Return summary.
+    inputs:
+      proposal: $input.proposal
+    outputs:
+      summary: string
+    demo_output:
+      summary: The proposal reduces manual coordination.
+  risks:
+    prompt: Identify the main risks of the supplied proposal. Return summary.
+    inputs:
+      proposal: $input.proposal
+    outputs:
+      summary: string
+    demo_output:
+      summary: Integration effort needs investigation.
+  question:
+    needs: [benefits, risks]
+    prompt: Use both reviews to write a self-contained decision question with choices and tradeoffs.
+    inputs:
+      benefits: $nodes.benefits.output.summary
+      risks: $nodes.risks.output.summary
+    outputs:
+      question: string
+    demo_output:
+      question: 'Choose A) a small pilot or B) more research, or describe another direction.'
+  choice:
+    kind: human
+    needs: [question]
+    question: $nodes.question.output.question
+  brief:
+    needs: [benefits, risks, question, choice]
+    prompt: Summarize the reviews and chosen direction. Interpret the answer against the supplied question; preserve uncertainty.
+    inputs:
+      benefits: $nodes.benefits.output.summary
+      risks: $nodes.risks.output.summary
+      question: $nodes.question.output.question
+      answer: $nodes.choice.output.answer
+    outputs:
+      summary: string
