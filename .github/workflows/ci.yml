@@ -113,6 +113,16 @@ jobs:
           echo "$RUNNER_TEMP/temporal-bin" >> "$GITHUB_PATH"
       - name: Verify installed Temporal version
         run: temporal --version
+      - name: Exercise consumer CLI and all bundled YAML scenarios
+        run: npm run test:e2e
+      - name: Upload CLI end-to-end evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cli-e2e-${{ github.sha }}
+          path: /tmp/steward-cli-e2e-*/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Verify worker-loss and session recovery
         # The harness owns its temp directory, server ports, and simulated runs.
         # It does not need Codex credentials or the repository runtime directory.

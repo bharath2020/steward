@@ -268,7 +268,7 @@ See [docs/architecture.md](docs/architecture.md) for the current durability and 
 
 ## Development and CI
 
-Run `npm run verify` for typechecking and unit tests. `npm run verify:recovery` additionally checks worker-loss and session recovery in isolated temporary storage using simulated agents.
+Run `npm run verify` for typechecking and unit tests. `npm run test:e2e` exercises the consumer CLI and all five bundled YAML workflows against an isolated Temporal server, including human answers, loop/queue boundaries, and invalid definitions. `npm run verify:recovery` checks worker-loss and session recovery. Run `npm run verify:all` for all three layers. See the [CLI surface and scenario matrix](docs/cli-testing.md) for prerequisites, evidence, and coverage limits.
 
 The [CI workflow](.github/workflows/ci.yml) checks Node 22 and 24 and runs a separate simulated recovery job. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, ownership boundaries, and validation expectations. Runtime history, credentials, local agent configuration, and generated test output are excluded from Git.
 
