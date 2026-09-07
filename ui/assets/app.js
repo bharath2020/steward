@@ -5,6 +5,7 @@ const ui = Object.fromEntries([
   "run-count", "run-list", "graph-title", "workflow-file", "definition-hash", "graph", "empty-state",
   "inspector-title", "inspector-status", "inspector-content", "event-count", "durable-path", "timeline", "toast",
   "workspace-observe", "workspace-author",
+  "authoring-node-detail", "authoring-node-title", "authoring-node-kind", "authoring-node-content", "authoring-node-close",
 ].map((id) => [id, document.getElementById(id)]));
 
 let current = null;
@@ -317,7 +318,10 @@ function renderGraph(definition, run) {
     }), `JOIN ${node.needs.length}`));
     const select = () => {
       selectedNodeId = node.id;
-      render(current);
+      if (run.status === "draft") {
+        updateGraph(definition, run);
+        renderAuthoringNodeDetail(definition, node.id);
+      } else render(current);
     };
     nodeGroup.addEventListener("click", select);
     nodeGroup.addEventListener("keydown", (event) => {
@@ -383,6 +387,46 @@ function keyValueList(entries, className) {
     list.append(item);
   });
   return list;
+}
+
+function hideAuthoringNodeDetail() {
+  ui["authoring-node-detail"].hidden = true;
+  ui["authoring-node-content"].replaceChildren();
+}
+
+function renderAuthoringNodeDetail(definition, nodeId) {
+  const node = definition?.nodes.find((item) => item.id === nodeId);
+  if (!node) {
+    hideAuthoringNodeDetail();
+    return;
+  }
+  const group = definition.groups.find((item) => item.id === node.group);
+  const details = document.createElement("dl");
+  details.className = "inspect-grid";
+  [
+    ["Node", node.id],
+    ["Type", node.kind === "human" ? "Human input" : node.agent],
+    ["Group", group?.title ?? "—"],
+    ["Needs", node.needs.join(", ") || "start"],
+  ].forEach(([key, value]) => {
+    details.append(text(document.createElement("dt"), key), text(document.createElement("dd"), value));
+  });
+  const assignment = text(
+    document.createElement("p"),
+    node.kind === "human" ? String(node.inputs.question) : node.prompt,
+  );
+  assignment.className = "authoring-node-prompt";
+  const inputs = Object.entries(node.inputs);
+  const outputs = Object.entries(node.outputs);
+  ui["authoring-node-content"].replaceChildren(
+    section("Configuration", details),
+    section(node.kind === "human" ? "Question" : "Prompt", assignment),
+    ...(inputs.length ? [section("Input bindings", keyValueList(inputs, "binding-list"))] : []),
+    section("Output variables", keyValueList(outputs, "output-list")),
+  );
+  text(ui["authoring-node-title"], node.title);
+  text(ui["authoring-node-kind"], node.kind === "human" ? "Human gate" : `${node.agent} agent`);
+  ui["authoring-node-detail"].hidden = false;
 }
 
 function agentMessageStream(messages = [], isLegacy = false) {
@@ -651,6 +695,7 @@ function showAuthoringDraft(draft) {
   authoringDraft = draft;
   if (workspaceMode !== "author") return;
   selectedNodeId = null;
+  hideAuthoringNodeDetail();
   renderedGraphKey = null;
   text(ui["graph-title"], draft.definition.name);
   text(ui["workflow-file"], "generated-workflow.yaml");
@@ -669,19 +714,40 @@ function setWorkspaceMode(mode) {
   if (workspaceMode === "author") {
     if (authoringDraft) showAuthoringDraft(authoringDraft);
     else {
+      hideAuthoringNodeDetail();
       renderGraph(null, null);
       text(ui["graph-title"], "Describe a workflow to begin");
       text(ui["workflow-file"], "generated-workflow.yaml");
       text(ui["definition-hash"], "not validated");
     }
-  } else render(current);
+  } else {
+    hideAuthoringNodeDetail();
+    render(current);
+  }
   requestAnimationFrame(sizeGraph);
   window.dispatchEvent(new CustomEvent("workspacechange", { detail: { mode: workspaceMode } }));
 }
 
 ui["workspace-observe"].addEventListener("click", () => setWorkspaceMode("observe"));
 ui["workspace-author"].addEventListener("click", () => setWorkspaceMode("author"));
+ui["authoring-node-close"].addEventListener("click", () => {
+  selectedNodeId = null;
+  hideAuthoringNodeDetail();
+  if (workspaceMode === "author" && authoringDraft) {
+    updateGraph(authoringDraft.definition, draftRun(authoringDraft.definition));
+  }
+});
 window.StewardConsole = { showAuthoringDraft, setWorkspaceMode };
+
+function repaintActiveGraph() {
+  renderedGraphKey = null;
+  if (workspaceMode === "author") {
+    if (authoringDraft) renderGraph(authoringDraft.definition, draftRun(authoringDraft.definition));
+    else renderGraph(null, null);
+    return;
+  }
+  if (current?.run) renderGraph(current.definition, current.run);
+}
 
 function setConnection(status) {
   ui.connection.className = `connection ${status}`;
@@ -729,11 +795,9 @@ document.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("appearancechange", () => {
-  if (!current?.run) return;
   // Repaint SVG markers and surfaces in browsers that cache inherited theme tokens.
   // The inspector stays mounted so unsent answers and focus survive appearance changes.
-  renderedGraphKey = null;
-  renderGraph(current.definition, current.run);
+  repaintActiveGraph();
 });
 
 ui["graph-fit"].addEventListener("click", () => {
@@ -750,9 +814,7 @@ ui["graph-zoom-reset"].addEventListener("click", () => {
 });
 new ResizeObserver(sizeGraph).observe(ui["graph-shell"]);
 document.fonts?.ready.then(() => {
-  if (!current?.run) return;
-  renderedGraphKey = null;
-  renderGraph(current.definition, current.run);
+  repaintActiveGraph();
 });
 
 connect();

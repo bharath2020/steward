@@ -23,6 +23,17 @@
             <span>01</span>
             <p>The graph appears when a validated workflow or durable run is available.</p>
           </div>
+          <aside id="authoring-node-detail" class="authoring-node-detail" aria-labelledby="authoring-node-title" hidden>
+            <div class="authoring-node-heading">
+              <div>
+                <span class="eyebrow">Selected step</span>
+                <h2 id="authoring-node-title">Step prompt</h2>
+              </div>
+              <button id="authoring-node-close" type="button" aria-label="Close step details">Close</button>
+            </div>
+            <span id="authoring-node-kind" class="status-label">Agent</span>
+            <div id="authoring-node-content" class="authoring-node-content"></div>
+          </aside>
         </div>
         <div class="legend" aria-label="Node status legend">
           <span><i class="pending-dot"></i> Pending</span>

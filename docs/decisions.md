@@ -19,6 +19,7 @@ This register records choices made for the production direction. It does not ass
 | ADR-011 | V1 file prompts resolve into immutable assignment text before start | Current loader extension |
 | ADR-012 | Local macOS bootstrap and detached example supervisor | Current one-click setup |
 | ADR-013 | Agent-assisted V1 authoring is validated preview data, not execution authority | Current Console builder |
+| ADR-014 | Draft export requires an explicit browser download gesture | Current Console builder |
 
 ## ADR-001 — CLI first with one control service
 
@@ -183,3 +184,11 @@ and the reboot boundary remain unchanged.
 Authoring providers run as local subprocesses with non-interactive, no-write permission settings and a two-minute timeout. They receive the V1 authoring contract as data and cannot extend it. Generated drafts use inline prompts only. The authoring endpoint rejects browser origins outside the same loopback Console. Chat and YAML remain browser-session preview data: no files are written, no durable command is recorded, and no Temporal Workflow is started. A preview uses synthetic pending presentation state and must never be reported as a run.
 
 **Consequences.** This implements the authoring experience anticipated by the vision while preserving ADR-002, ADR-003, ADR-006, ADR-009, and ADR-010. Codex and Claude Code authentication remains owned by their installed local CLIs; absence or failure is explicit. The current loopback endpoint still lacks the target local session credential and therefore does not pass the P2 control-security gate. Persisting drafts, editing YAML directly, generating example input, and starting a generated draft require later explicit commands and contracts rather than being inferred from chat.
+
+## ADR-014 — Draft export is an explicit browser download
+
+**Context.** ADR-013 keeps generated YAML in browser-session preview state and forbids implicit persistence. Authors still need to take ownership of parser-accepted YAML without copying it from the conversation or granting the builder repository filesystem access.
+
+**Decision.** Supersede only ADR-013's blanket no-file-write wording for an explicit Export YAML browser action. Keep export disabled until the existing parser accepts a draft. On a user click, download the exact accepted YAML bytes through the browser with a portable filename derived from the workflow name. Do not add a server write endpoint, choose a repository path, start a run, or export an invalid/in-flight response.
+
+**Consequences.** The browser and operator own the download destination and confirmation behavior. Exported YAML is an author-controlled source file, not durable execution evidence or proof that a run started. Draft chat and YAML remain session-only until the explicit gesture, and later save/start commands still require separate contracts and authorization.

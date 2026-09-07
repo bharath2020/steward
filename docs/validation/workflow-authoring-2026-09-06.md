@@ -7,6 +7,8 @@ Applicable decisions: ADR-001, ADR-002, ADR-003, ADR-006, ADR-009, ADR-010, and 
 ## Automated evidence
 
 - `npm run verify` exited 0 with TypeScript passing and 59/59 tests passing.
+- After adding preview-node prompt inspection, `npm run build`, `npm test`, `node --check ui/assets/app.js`, and `git diff --check` exited 0; the suite remained at 59/59 passing.
+- After adding explicit YAML export, the same build, test, JavaScript syntax, and diff checks exited 0; filename coverage brought the suite to 60/60 passing.
 - Authoring tests cover input/history bounds, provider selection, current-draft prompt binding, parser-gated acceptance, one bounded repair pass, invalid-result rejection, same-loopback Origin acceptance, and foreign-Origin rejection before provider invocation.
 - UI composition tests cover the authoring mount points and explicit `authoring.js` asset allowlist while preserving all existing Console mount points.
 
@@ -20,8 +22,10 @@ Applicable decisions: ADR-001, ADR-002, ADR-003, ADR-006, ADR-009, ADR-010, and 
 
 - The updated Console was served independently on `http://127.0.0.1:4311` while the existing local stack stayed untouched.
 - At the available 596×885 in-app viewport, Build stacked chat above graph, retained every control, reported provider work immediately, replaced the empty graph only after validation, and had no page-level horizontal overflow (`scrollWidth` equaled viewport/body width at 596 CSS pixels).
+- A browser-generated two-node Codex draft was rendered, tapping `Research user needs` opened a graph-local drawer with its exact prompt, provider, dependencies, and declared `user_needs: string[]` output, and Close dismissed the drawer without replacing the draft.
+- Export YAML was disabled before validation, enabled after Codex produced the parser-accepted `Export Check` draft, and changed to Exported after the explicit click. The browser downloaded `export-check.yaml`; its contents were the generated V1 definition with the expected name, prompt, input binding, and four declared outputs.
 - Switching Observe → Build did not start a run. Existing SSE observation remained connected while Build owned the graph surface.
 
 ## Boundaries not claimed
 
-This evidence does not pass P2 or production gates. Drafts are not persisted, generated input is not authored, the target local session credential is not implemented, direct YAML editing is not implemented, and a generated draft cannot yet be saved or started from Build. The current test demonstrates installed Codex/Claude provider compatibility on this host, not all CLI versions or authentication configurations.
+This evidence does not pass P2 or production gates. The server does not persist drafts or choose an export destination, generated input is not authored, the target local session credential is not implemented, direct YAML editing is not implemented, and a generated draft cannot yet be started from Build. The browser download is an operator-owned source file, not runtime evidence. The current test demonstrates installed Codex/Claude provider compatibility on this host, not all CLI versions or authentication configurations.

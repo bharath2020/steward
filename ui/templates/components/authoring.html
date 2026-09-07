@@ -22,7 +22,10 @@
                 <option value="claude">Claude Code</option>
               </select>
             </label>
-            <button id="authoring-send" class="primary-button" type="submit"><span>Generate</span><kbd>⌘↵</kbd></button>
+            <div class="authoring-submit-actions">
+              <button id="authoring-export" class="secondary-button" type="button" disabled>Export YAML</button>
+              <button id="authoring-send" class="primary-button" type="submit"><span>Generate</span><kbd>⌘↵</kbd></button>
+            </div>
           </div>
           <p class="authoring-policy">Read-only agent · YAML is parsed before preview · chatting never starts a run</p>
         </form>

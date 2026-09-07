@@ -59,6 +59,11 @@ body { height: 100dvh; display: flex; flex-direction: column; }
     grid-template-rows: auto minmax(360px, 45dvh) minmax(360px, 48dvh);
     grid-template-areas: "runs runs" "graph graph" "inspector timeline";
   }
+  :root[data-workspace="author"] .workspace {
+    grid-template-columns: minmax(300px, 390px) minmax(0, 1fr);
+    grid-template-rows: minmax(620px, calc(100dvh - 120px));
+    grid-template-areas: "author graph";
+  }
   .graph-panel, :root[data-layout="review"] .graph-panel { height: auto; }
   .inspector, :root[data-layout="review"] .inspector { border: 0; border-left: 1px solid var(--line); overflow: auto; }
   .timeline-panel { display: grid; height: auto; grid-template-columns: 180px minmax(0, 1fr); }

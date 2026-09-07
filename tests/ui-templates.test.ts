@@ -25,6 +25,9 @@ const { normalizePreferences, resolveTheme, shouldStartRun } = require("../ui/as
   resolveTheme(preference: Preferences["theme"], systemDark: boolean): "dark" | "light";
   shouldStartRun(event: ShortcutEvent, activeElement: Target | null, disabled: boolean): boolean;
 };
+const { workflowFilename } = require("../ui/assets/authoring.js") as {
+  workflowFilename(name: unknown): string;
+};
 
 // A DOM-shaped target keeps keyboard policy tests independent of a browser or DOM package.
 function target(tagName: string, parentElement: Target | null = null, editable = false): Target {
@@ -56,7 +59,8 @@ test("dashboard composition preserves each application mount point exactly once"
     "inspector-title", "inspector-status", "inspector-content", "timeline-title", "event-count", "durable-path",
     "timeline", "toast", "layout-select", "theme-select",
     "workspace-observe", "workspace-author", "authoring-title", "authoring-status", "authoring-messages",
-    "authoring-form", "authoring-prompt", "authoring-provider", "authoring-send",
+    "authoring-form", "authoring-prompt", "authoring-provider", "authoring-export", "authoring-send",
+    "authoring-node-detail", "authoring-node-title", "authoring-node-kind", "authoring-node-content", "authoring-node-close",
   ];
   for (const id of requiredIds) {
     assert.equal(ids.filter((candidate) => candidate === id).length, 1, `${id} must appear exactly once`);
@@ -73,6 +77,13 @@ test("dashboard composition preserves each application mount point exactly once"
     assert.ok(select, `${id} must be a select control`);
     for (const value of options) assert.match(select[1], new RegExp(`\\bvalue=["']${value}["']`));
   }
+});
+
+test("workflow export filenames are portable and retain the YAML extension", () => {
+  assert.equal(workflowFilename("Release Readiness / Final"), "release-readiness-final.yaml");
+  assert.equal(workflowFilename("  Product_v2  "), "product-v2.yaml");
+  assert.equal(workflowFilename("日本語"), "workflow.yaml");
+  assert.equal(workflowFilename(null), "workflow.yaml");
 });
 
 test("UI asset lookup serves only the explicit public asset allowlist", async () => {

@@ -47,11 +47,11 @@ Resizing uses the same mounted components and does not replace answer drafts.
 
 ## Workflow builder
 
-The toolbar switches between **Observe** and **Build** without reconnecting or changing a run. Build uses a chat rail beside the shared SVG graph on desktop and stacks chat above graph below 700 CSS pixels. Choose Codex or Claude Code, describe the intended nodes/dependencies/human decisions, and submit with the button or Command/Control-Enter.
+The toolbar switches between **Observe** and **Build** without reconnecting or changing a run. Build uses a chat rail beside the shared SVG graph on desktop and stacks chat above graph below 700 CSS pixels. Choose Codex or Claude Code, describe the intended nodes/dependencies/human decisions, and submit with the button or Command/Control-Enter. Selecting a preview node opens its exact prompt or human question, configuration, bindings, and declared outputs in a dismissible drawer over the graph.
 
-The server supplies the V1 contract and current accepted draft to a bounded, read-only provider subprocess. Provider output is parsed as structured `{reply, workflow_yaml}` data. `parseWorkflow` must accept the YAML before the browser receives it; one parser-diagnostic repair attempt is allowed. The last valid graph remains in place when a later revision fails. Accepted responses include an expandable exact YAML view.
+The server supplies the V1 contract and current accepted draft to a bounded, read-only provider subprocess. Provider output is parsed as structured `{reply, workflow_yaml}` data. `parseWorkflow` must accept the YAML before the browser receives it; one parser-diagnostic repair attempt is allowed. The last valid graph remains in place when a later revision fails. Accepted responses include an expandable exact YAML view and enable an explicit Export YAML download using a portable workflow-derived filename.
 
-Conversation and YAML are scoped to the current page and are not durable evidence. Build previews use pending node presentation and cannot start a run, write a file, or represent execution status. The authoring endpoint accepts only the local Console browser origin. These boundaries are recorded in ADR-013.
+Conversation and YAML are scoped to the current page and are not durable evidence. Build previews use pending node presentation and cannot start a run, choose a filesystem destination, or represent execution status. Only the operator-triggered browser export may download the current parser-accepted YAML; it does not start or persist a run. The authoring endpoint accepts only the local Console browser origin. These boundaries are recorded in ADR-013 and ADR-014.
 
 Validation on 2026-09-06: typecheck and all 48 existing tests passed (tests used
 `node --import tsx --test tests/*.test.ts` because the sandbox blocked the tsx CLI

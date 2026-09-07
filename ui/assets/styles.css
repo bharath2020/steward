@@ -119,6 +119,10 @@ select {
 .authoring-actions { display: flex; justify-content: space-between; align-items: end; gap: 10px; }
 .authoring-actions label { display: grid; gap: 5px; }
 .authoring-actions select { min-width: 128px; }
+.authoring-submit-actions { display: flex; align-items: stretch; gap: 7px; }
+.secondary-button { border: 1px solid var(--line-bright); background: var(--surface-raised); color: var(--text); padding: 9px 11px; cursor: pointer; font: 10.5px/1.2 var(--mono); text-transform: uppercase; letter-spacing: 0.04em; }
+.secondary-button:hover, .secondary-button:focus-visible { border-color: var(--accent); outline-color: var(--accent); }
+.secondary-button:disabled { opacity: 0.38; cursor: default; }
 .authoring-policy { margin: 2px 0 0; color: var(--quiet); font: 9.5px/1.5 var(--mono); }
 
 :root[data-workspace="author"] .workspace { grid-template-columns: minmax(320px, 390px) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); grid-template-areas: "author graph"; }
@@ -183,6 +187,15 @@ select {
 .empty-state[hidden] { display: none; }
 .empty-state span { color: var(--line-bright); font: 74px/1 var(--mono); }
 .empty-state p { max-width: 320px; font-size: 14px; line-height: 1.6; }
+.authoring-node-detail { position: sticky; z-index: 4; top: 12px; bottom: 12px; float: right; width: min(380px, calc(100% - 24px)); max-height: calc(100% - 24px); margin: 12px; overflow: auto; border-left: 2px solid var(--accent); background: color-mix(in srgb, var(--bg) 96%, transparent); box-shadow: -18px 0 36px rgba(0, 0, 0, 0.22); animation: authoring-detail-arrive 160ms ease both; }
+.authoring-node-detail[hidden] { display: none; }
+.authoring-node-heading { position: sticky; top: 0; z-index: 1; display: flex; align-items: start; justify-content: space-between; gap: 16px; padding: 18px 18px 12px; background: var(--bg); border-bottom: 1px solid var(--line); }
+.authoring-node-heading h2 { margin: 4px 0 0; font-size: 18px; letter-spacing: -0.025em; }
+.authoring-node-heading button { min-height: 32px; padding: 6px 9px; border: 1px solid var(--line-bright); background: var(--surface); color: var(--text); font: 10px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.06em; cursor: pointer; }
+.authoring-node-heading button:hover, .authoring-node-heading button:focus-visible { border-color: var(--accent); outline-color: var(--accent); }
+.authoring-node-detail > .status-label { display: block; padding: 14px 18px 0; }
+.authoring-node-content { padding: 0 18px 10px; }
+.authoring-node-prompt { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text) !important; }
 .legend { min-height: 48px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 18px; padding: 0 24px; color: var(--muted); font-size: 11px; }
 .legend span { display: flex; align-items: center; gap: 6px; }
 .legend i { width: 7px; height: 7px; border-radius: 50%; background: var(--quiet); }
@@ -300,6 +313,7 @@ select {
 @keyframes live-pulse { 50% { opacity: 0.4; } }
 @keyframes authoring-breathe { 50% { opacity: 0.45; } }
 @keyframes authoring-arrive { from { opacity: 0; transform: translateY(4px); } }
+@keyframes authoring-detail-arrive { from { opacity: 0; transform: translateX(8px); } }
 @keyframes edge-flow { to { stroke-dashoffset: -13; } }
 @keyframes node-arrive { from { opacity: 0; } }
 @keyframes event-arrive { from { opacity: 0; transform: translateX(8px); } }
