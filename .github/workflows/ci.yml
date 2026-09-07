@@ -42,13 +42,15 @@ jobs:
       - name: Verify Temporal completion, committed output, and repeat setup
         working-directory: ${{ runner.temp }}/Steward
         run: node --import tsx scripts/verify-installed-setup.cjs
-      - name: Repeat archive installer without overwriting saved data
+      - name: Update archive installation and preserve saved data
         env:
           STEWARD_INSTALL_DIR: ${{ runner.temp }}/Steward
+          STEWARD_REF: ${{ github.sha }}
         run: |
           curl -fsSL "https://raw.githubusercontent.com/bharath2020/steward/$GITHUB_SHA/install.sh" | bash -s -- --no-open
           cd "$STEWARD_INSTALL_DIR"
-          node -e 'if(require("fs").readdirSync("runtime/runs").length!==1)process.exit(1)'
+          test "$(cat .steward-install)" = "$GITHUB_SHA"
+          node --import tsx scripts/verify-installed-setup.cjs
       - name: Run repository verification
         working-directory: ${{ runner.temp }}/Steward
         run: npm run verify

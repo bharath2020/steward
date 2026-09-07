@@ -22,6 +22,7 @@ This register records choices made for the production direction. It does not ass
 | ADR-014 | Draft export requires an explicit browser download gesture | Current Console builder |
 | ADR-015 | Explicit bounded array fan-out | Current runtime |
 | ADR-016 | Pre-adoption runtime has one current interpreter and no compatibility shims | Current runtime |
+| ADR-017 | Repeat archive installation updates source and restarts owned services | Current installer correction |
 
 ## ADR-001 — CLI first with one control service
 
@@ -218,3 +219,38 @@ This is an explicitly documented compatible extension under ADR-002, not the nes
 This supersedes the compatibility and retained-interpreter portions of ADR-002, ADR-007, ADR-009, ADR-010, and ADR-015. Their language validation, durability, evidence, ownership, and bounded-history requirements remain in force. Once Steward is adopted, incompatible changes require a versioned migration decision and replay evidence.
 
 **Consequences.** Current code and tests have one execution path. Operators may inspect preserved artifacts from pre-adoption runs, but must not present an open removed-type execution as resumable. Rollback means running a matching historical bundle against preserved state, not adding compatibility shims back to the current bundle or deleting runtime data.
+
+
+## ADR-017 — Repeat archive installation updates source
+
+**Context.** Pointing the public command to `main` only fixed fresh installs.
+ADR-012's repeat-install reuse rule left existing users running old source.
+
+**Decision.** Supersede that rule for `install.sh`: every invocation downloads
+`main` by default (or the explicit `STEWARD_REF`), validates the staged archive,
+and updates installer-owned source. The bootstrap lifecycle helper
+`scripts/update-install.mjs` stops only recognized Steward services whose working
+directory matches the installation, then replaces source and invokes the normal
+setup path. Direct setup clicks retain their reconnect-only behavior.
+
+Source paths are tracked in `.steward-source-files`; updates remove upstream-deleted
+managed paths. For legacy installs, incoming source directories are replaced but
+unknown top-level files remain. Preserve runtime databases, runs, outputs, local
+environment files, and unrelated top-level files. Keep the previous source in a
+sibling backup, restore it on a caught replacement error, and fail on conflicting
+setup locks or services that do not stop. The installer lock spans setup; updated
+lockfiles require locked dependency installation rather than `npm ls` acceptance.
+
+**Consequences.** Updates interrupt this installation's active processes. They do
+not cancel workflows, manufacture outputs, migrate histories, or establish replay
+compatibility beyond ADR-016. Source edits are replaced and retained in the backup.
+A crash during replacement may require restoring that backup; this is not an
+atomic multi-file upgrade. A failed post-update setup leaves the new source and
+backup available and reports failure. No other workspace's services are stopped.
+Ownership remains bootstrap/lifecycle under ADR-009 and ADR-012; runtime scheduling
+and committed evidence remain with their existing owners.
+
+**Evidence.** Installer tests exercise A-to-B replacement, deleted source, legacy
+markers, failed downloads, saved data, and real process shutdown scoped to a
+workspace. The isolated macOS CI also repeats installation at the candidate SHA
+and rechecks Temporal completion and output receipts after restart.

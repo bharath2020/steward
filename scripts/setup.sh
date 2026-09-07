@@ -2,6 +2,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+if [ -d "$PWD.installing" ] && [ "${STEWARD_INSTALLER:-0}" != 1 ]; then
+  echo "The archive installer is updating Steward. Wait for it to finish." >&2
+  exit 1
+fi
 mkdir -p runtime/services
 if ! mkdir runtime/services/bootstrap.lock 2>/dev/null; then
   echo "Another setup is installing dependencies. Wait for it to finish. If it was interrupted, remove runtime/services/bootstrap.lock after confirming it has stopped." >&2
@@ -41,7 +45,7 @@ echo "Checking Steward dependencies…"
 # Avoid replacing dependencies underneath a running worker on repeat clicks.
 fingerprint=$(node -e 'const fs=require("fs"), c=require("crypto"); console.log(c.createHash("sha256").update(fs.readFileSync("package-lock.json")).update(process.versions.node.split(".")[0]).digest("hex"))')
 if [ ! -f node_modules/.steward-setup ] || [ "$(cat node_modules/.steward-setup)" != "$fingerprint" ]; then
-  if [ -d node_modules ] && npm ls --depth=0 >/dev/null 2>&1; then
+  if [ "${STEWARD_INSTALL_UPDATED:-0}" != 1 ] && [ -d node_modules ] && npm ls --depth=0 >/dev/null 2>&1; then
     echo "Existing dependencies satisfy the package; preserving the running worker's installation."
   else
     npm ci

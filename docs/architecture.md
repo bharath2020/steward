@@ -98,3 +98,24 @@ Under ADR-012, `Setup Steward.command` and `scripts/setup.sh` bootstrap macOS pr
 The supervisor remains local and does not start at login. Setup prints its PID and logs to `runtime/services/`; SIGTERM cleans up its owned services. Existing services and their dashboard example settings are reused. The fixed database/log path and task queue remain; setup rejects runtime-directory and Temporal-address overrides. See the README for prerequisite installation, restart, and uncertain-start behavior.
 
 Validation on 2026-09-06: typecheck and 50 tests passed with exit 0; shell syntax and all four example/input catalogs passed. The installed-prerequisite setup path restarted Temporal and a single worker from the existing database, then a repeat launch kept the same worker and 22 saved runs. All 181 pre-existing `output.json` hashes were unchanged. The file-prompt example submitted through setup as `2026-09-06T08-30-44-705Z-a5e91b`; Temporal Run ID `01a075d7-61e9-720f-84a1-a591f4b15d70` completed at history event 35, with the matching committed review output and receipt. Missing-prerequisite Homebrew installation was source-checked but not executed on a clean Mac. These checks do not claim production/reboot durability or full P2 qualification.
+
+Installer correction (2026-09-07, ADR-017): the public bootstrap and archive default
+follow `main`. Every archive invocation downloads source; existing installations
+use `scripts/update-install.mjs` to stop cwd-verified Steward services, replace
+managed source, and preserve local runtime/configuration data. Previous source
+is retained beside the installation. Source manifests remove upstream-deleted
+paths on subsequent updates; legacy installs preserve unknown top-level paths.
+The install lock spans setup, and setup declines concurrent direct clicks.
+Direct setup remains reconnect-only. Neither entrypoint accepts workflow output.
+
+`npm run verify:installer` checks the published command and exercises fresh and
+repeat download behavior; it is included in the push/PR `npm run verify` gate.
+The isolated macOS job pins both installs to its candidate SHA and checks durable
+completion, receipt integrity, and lack of duplicate runs after update/restart.
+
+Local validation on 2026-09-07: `npm run verify` exited 0 with the installer
+publication guard, eight installer checks, typecheck, and 75 tests passing.
+`bash -n install.sh scripts/setup.sh` and `git diff --check` passed. Fixture
+processes verified SIGTERM shutdown only for the installed workspace. These are
+local upgrade checks; the configured clean-macOS CI must complete before claiming
+fresh prerequisite installation and durable restart verification for this change.

@@ -55,18 +55,24 @@ For future changes, follow the vision and adopted decisions, use the technical d
 ### One-command macOS installation
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bharath2020/steward/codex/one-click-setup/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/bharath2020/steward/main/install.sh | bash
 ```
 
 No Git, cloning, or directory changes are required. The installer downloads the
 source archive to `~/Applications/Steward`, then installs prerequisites and opens
-the console. Rerunning it reopens the existing installation without replacing
-source or saved runs; it is not an upgrade command. The download currently follows
-the `codex/one-click-setup` branch. You can open `Setup Steward.command` or any of
-the four example launchers in that installed folder afterward.
+the console. Every invocation downloads the latest `main` source, including when
+Steward is already installed. Updates stop services belonging to that installation,
+replace source, and run setup to restart the console. Saved `runtime/` data,
+outputs, local `.env` files, and unrelated top-level files are preserved. The
+previous source is retained in the printed `.steward-source-backup.*` folder beside
+the installation. Edits inside source directories are replaced; their old copies
+remain in that backup. `Setup Steward.command` reopens without downloading.
 
 `STEWARD_INSTALL_DIR` selects a different absolute installation directory;
-`STEWARD_REF` can pin a commit. Existing unrelated directories are never overwritten.
+`STEWARD_REF` can pin a commit. `npm run verify:installer` checks the public
+command and exercises the default download and explicit pin; CI runs this on
+every push and pull request through `npm run verify`. Existing unrelated
+directories are never overwritten.
 A force-interrupted download may leave `<installation-directory>.installing`;
 confirm no installer is running before removing that empty lock directory.
 
