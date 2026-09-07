@@ -344,3 +344,9 @@ select {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
 }
+
+/* Scope contents are inspected without inventing execution edges. */
+.scope-steps { display: grid; gap: 8px; }
+.scope-steps button { min-height: 44px; padding: 10px; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.scope-back { min-height: 44px; padding: 8px 12px; margin-bottom: 12px; border: 1px solid var(--line); background: transparent; color: inherit; cursor: pointer; }

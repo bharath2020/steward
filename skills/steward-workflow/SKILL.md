@@ -1,16 +1,16 @@
 ---
 name: steward-workflow
-description: Turn a workflow description into Steward version 1 YAML and example JSON input. Use when creating or editing Steward agent workflows with dependencies, human questions, loops, or array fan-out.
+description: Turn a workflow description into Steward version 1 YAML and example JSON input. Use when creating or editing Steward agent workflows with dependencies, human questions, scoped multi-step loops, or array fan-out.
 ---
 
 # Author Steward workflows
 
 Produce reviewable workflow YAML and matching example input from the user's intent. Any coding agent can use this skill; the agent authoring the file is separate from the provider that will execute its nodes.
 
-Read [the V1 schema reference](references/yaml-schema.md) before drafting. For working patterns, read [the examples guide](references/examples.md) and only the relevant linked assets. These describe the implemented V1 language, not the proposed nested language in Steward's product specification.
+Read [the V1 schema reference](references/yaml-schema.md) before drafting. For working patterns, read [the examples guide](references/examples.md) and only the relevant linked assets. These describe the V1 language, including executable scopes and bounded multi-step loops. The runtime loader is authoritative.
 
 1. Identify the intended result, initial inputs, independent work, required handoffs, human decisions, and stopping conditions. Ask only for missing information that materially changes the graph; state reasonable assumptions.
-2. Give each node a bounded assignment and explicit typed outputs. Put data references in `inputs`, not interpolated prompt text. List every referenced predecessor in `needs`, including human questions and fan-out sources. A join must depend on all work whose results it consumes.
+2. Give each agent node a bounded assignment and explicit typed outputs. Use `kind: scope` with explicit input/export bindings to group a graph; add its `loop` to repeat that graph. Sessions default to fresh; opt into `loop.agent_sessions: resume` only when continuing each agent's conversation is intended, while keeping explicit state handoffs. Put data references in `inputs`, not interpolated prompt text. List every referenced predecessor in `needs`, including human questions and fan-out sources. A join must depend on all work whose results it consumes.
 3. Choose explicit execution providers: `codex` for real agent work or `simulated` for a demonstration. Claude or another agent can author YAML, but `agent: claude` is not supported by this runtime. Preserve the user's execution choice.
 4. Write the requested YAML and sample JSON input to the user's chosen location. Use inline prompts by default. If using `prompt_file`, deliver that UTF-8 file too, with its path relative to the YAML. Do not overwrite unrelated files.
 5. Validate using an available Steward checkout or installed source distribution with dependencies installed:

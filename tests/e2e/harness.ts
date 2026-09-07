@@ -26,7 +26,7 @@ export class Harness {
   children: ChildProcess[] = [];
   connection?: Connection;
   client!: Client;
-  async start() {
+  async start(workerEnv: NodeJS.ProcessEnv = {}) {
     this.root = await mkdtemp(join(tmpdir(), "steward-cli-e2e-"));
     console.log(`E2E evidence: ${this.root}`);
     const port = await new Promise<number>((done, reject) => {
@@ -45,7 +45,10 @@ export class Harness {
       catch { this.assertAlive(); return undefined; }
     }, "Temporal readiness");
     this.client = new Client({ connection: this.connection });
+    const priorEnv = this.env;
+    this.env = { ...this.env, ...workerEnv };
     this.launch(process.execPath, ["--import", "tsx", "src/worker.ts"], "worker");
+    this.env = priorEnv;
   }
   assertAlive() {
     for (const child of this.children) assert(child.exitCode === null && child.signalCode === null, `Service exited; inspect ${this.root}`);

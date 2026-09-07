@@ -1,0 +1,55 @@
+TAP version 13
+# E2E evidence: /var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-MOwwZ4
+# Subtest: scope session policy reaches the external provider through real Temporal
+    # Subtest: omitting the policy starts fresh sessions for every iteration
+    ok 1 - omitting the policy starts fresh sessions for every iteration
+      ---
+      duration_ms: 1748.142042
+      type: 'test'
+      ...
+    # Subtest: resume preserves each parallel leaf session across iterations without sharing siblings
+    not ok 2 - resume preserves each parallel leaf session across iterations without sharing siblings
+      ---
+      duration_ms: 254.866
+      type: 'test'
+      location: '/Users/bharath2020/Documents/projects/steward/tests/e2e/scope-sessions.test.ts:15:3303'
+      failureType: 'testCodeFailure'
+      error: |-
+        {"code":1,"stdout":"","stderr":"Error: Invalid workflow: node repair.loop has an unsupported field\n    at fail (/Users/bharath2020/Documents/projects/steward/src/definition.ts:33:9)\n    at normalizeLoop (/Users/bharath2020/Documents/projects/steward/src/definition.ts:82:61)\n    at normalizeNode (/Users/bharath2020/Documents/projects/steward/src/definition.ts:188:13)\n    at <anonymous> (/Users/bharath2020/Documents/projects/steward/src/definition.ts:386:5)\n    at Array.map (<anonymous>)\n    at compileWorkflow (/Users/bharath2020/Documents/projects/steward/src/definition.ts:385:43)\n    at loadWorkflow (/Users/bharath2020/Documents/projects/steward/src/definition.ts:460:10)\n    at async main (/Users/bharath2020/Documents/projects/steward/src/cli/start.ts:17:17)\n"}
+        
+        1 !== 0
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 0
+      actual: 1
+      operator: 'strictEqual'
+      stack: |-
+        Harness.cli (/Users/bharath2020/Documents/projects/steward/tests/e2e/harness.ts:74:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async execute (/Users/bharath2020/Documents/projects/steward/tests/e2e/scope-sessions.test.ts:64:20)
+        async TestContext.<anonymous> (/Users/bharath2020/Documents/projects/steward/tests/e2e/scope-sessions.test.ts:94:19)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (/Users/bharath2020/Documents/projects/steward/tests/e2e/scope-sessions.test.ts:93:3)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    1..2
+not ok 1 - scope session policy reaches the external provider through real Temporal
+  ---
+  duration_ms: 4199.936083
+  type: 'test'
+  location: '/Users/bharath2020/Documents/projects/steward/tests/e2e/scope-sessions.test.ts:15:684'
+  failureType: 'subtestsFailed'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..1
+# tests 3
+# suites 0
+# pass 1
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4443.138333

@@ -124,7 +124,7 @@ export function rebuildState(
         {
           id: node.id,
           title: node.title,
-          agent: node.kind === "human" ? "human" : transition.mode,
+          agent: node.kind === "scope" ? "scope" : node.kind === "human" ? "human" : transition.mode,
           group: node.group,
           status: "pending",
           phase: "Waiting for dependencies",
@@ -151,7 +151,16 @@ export function rebuildState(
     state.updatedAt = event.at;
     if (event.wave !== undefined) state.currentWave = Math.max(state.currentWave, event.wave);
     const data = dataObject(event);
+    if (event.type === "node.registered" && event.nodeId && !state.nodes[event.nodeId]) {
+      state.nodes[event.nodeId] = {
+        id: event.nodeId, title: String(data.title), definitionId: String(data.definitionId), parentId: String(data.parentId),
+        agent: data.kind === "scope" ? "scope" : data.kind === "human" ? "human" : transition.mode,
+        needs: data.needs as string[], status: "pending", phase: "Waiting for dependencies",
+      };
+      state.totalCount += 1;
+    }
     const node = event.nodeId ? state.nodes[event.nodeId] : undefined;
+    if (node && ["condition_met", "exhausted_accepted", "exhausted_failed"].includes(String(data.loopOutcome))) node.loopOutcome = data.loopOutcome as NonNullable<typeof node.loopOutcome>;
     switch (event.type) {
       case "node.started":
         if (node) {
@@ -269,6 +278,9 @@ export function rebuildState(
           node.status = "running";
           node.phase = event.message;
         }
+        break;
+      case "loop.satisfied":
+        if (node) node.phase = "Loop condition met";
         break;
       case "loop.exhausted":
         if (node && data.accepted !== true) {

@@ -1,0 +1,66 @@
+TAP version 13
+# E2E evidence: /var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-s9dIdg
+# Subtest: scope session policy reaches the external provider through real Temporal
+    # Subtest: omitting the policy starts fresh sessions for every iteration
+    ok 1 - omitting the policy starts fresh sessions for every iteration
+      ---
+      duration_ms: 1733.460833
+      type: 'test'
+      ...
+    # Subtest: resume preserves each parallel leaf session across iterations without sharing siblings
+    ok 2 - resume preserves each parallel leaf session across iterations without sharing siblings
+      ---
+      duration_ms: 1806.222042
+      type: 'test'
+      ...
+    # Subtest: explicit fresh keeps each iteration independent
+    ok 3 - explicit fresh keeps each iteration independent
+      ---
+      duration_ms: 1806.02575
+      type: 'test'
+      ...
+    # Subtest: loop-free groups inherit sessions while nested repeats own isolated activation sessions
+    ok 4 - loop-free groups inherit sessions while nested repeats own isolated activation sessions
+      ---
+      duration_ms: 4154.778834
+      type: 'test'
+      ...
+    # Subtest: worker restart at a human gate preserves accepted session affinity without rerunning leaves
+    ok 5 - worker restart at a human gate preserves accepted session affinity without rerunning leaves
+      ---
+      duration_ms: 11784.801833
+      type: 'test'
+      ...
+    # Subtest: failed resume waits for recovery and fresh recovery replaces the next iteration session
+    ok 6 - failed resume waits for recovery and fresh recovery replaces the next iteration session
+      ---
+      duration_ms: 2741.585458
+      type: 'test'
+      ...
+    # Subtest: mapped leaves retain separate position sessions across scope iterations
+    ok 7 - mapped leaves retain separate position sessions across scope iterations
+      ---
+      duration_ms: 2048.833833
+      type: 'test'
+      ...
+    # Subtest: missing provider session IDs explicitly fall back to fresh turns
+    ok 8 - missing provider session IDs explicitly fall back to fresh turns
+      ---
+      duration_ms: 1800.057625
+      type: 'test'
+      ...
+    1..8
+ok 1 - scope session policy reaches the external provider through real Temporal
+  ---
+  duration_ms: 30075.734084
+  type: 'test'
+  ...
+1..1
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 30343.312833

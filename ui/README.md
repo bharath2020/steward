@@ -117,3 +117,10 @@ actual size. Larger graphs scroll inside the graph panel. **Fit** shows the full
 graph, **− / +** adjusts zoom, and the percentage button restores 100%. Resizing,
 zooming, and changing appearance preserve the selected node and answer drafts.
 This is presentation under ADR-009/ADR-010; it does not schedule workflow work.
+
+
+## Scope inspection
+
+Executable scopes remain one node in the top-level graph. Select one to inspect its exported bindings, repeat condition, interpreter outcome, and child instances. Select a child to inspect its committed input/output or answer its human gate; select a nested scope to continue drilling down. Each row includes the complete iteration-qualified instance ID so earlier iterations remain distinguishable. Human drafts are keyed by the runtime request ID. Back navigation returns to the parent scope.
+
+Build previews show scope children in the detail drawer, using the immutable authored graph without creating runtime instances. Loop labels display runtime outcomes; legacy records without an outcome show `OUTCOME UNKNOWN`. Neither graph layout nor browser code evaluates loop predicates.

@@ -22,7 +22,7 @@ Source review on 2026-09-05 found these gaps. They are implementation work, not 
 | Dashboard lifecycle and health come from disk | `src/server/index.ts`, `snapshot` and `/health` | Temporal reconciliation and independent liveness/readiness contracts. |
 | Start requests have no stable caller command identity | `src/client.ts`, `src/cli/start.ts`, `/api/runs` | Durable start intent and uncertain-response reconciliation. A browser in-flight guard is not durable deduplication. |
 | HTTP control is always enabled; bodies are unbounded | `src/server/index.ts`, `body` and POST routes | Explicit control capability, request schemas and limits. |
-| Browser loop evaluation omits supported runtime operators | `ui/assets/app.js`, `loopConditionMet`; `src/loop.ts` | Publish a typed runtime loop outcome and format it in shared presentation. |
+| Legacy records can lack runtime loop outcomes | `ui/assets/graph-layout.js`; `src/loop.ts` | Format interpreter outcomes; show unknown when absent, without browser predicate evaluation. |
 | Runtime is coupled to examples, cwd, source files, and unverified listening ports | `src/cli/launcher.ts`, `src/config.ts`, `package.json` | Packaged assets, validated profiles, service ownership and readiness. UI assets now resolve module-relatively, but runtime paths and child entrypoints remain cwd-relative. |
 | Launcher database/log paths and Temporal probe ignore runtime/address overrides used elsewhere | `src/cli/launcher.ts`, `src/store.ts`, `src/config.ts` | A shared validated runtime profile must align the database, artifact directory, logs, and Temporal address. `YAMLFLOW_RUNTIME_DIR` currently does not relocate the launcher's `runtime/temporal.db` or `runtime/services`. |
 
@@ -100,7 +100,7 @@ Use a separate Ajv 2020 validator for future Draft 2020-12 contracts. Ajv does n
 
 Resolve executor selection once: explicit step executor, then workflow default. A simulation override is explicit, recorded in the manifest, and visibly labels the whole run simulated. The current run-wide `mode` remains explicit until executor selection is compiled into the plan.
 
-The compiled-plan foundation covers existing DAG, named-limit, node-loop, and human-gate semantics. Nested executable scopes follow in a separate milestone. Unknown future syntax fails validation rather than being flattened into different behavior.
+The compiled-plan foundation covers existing DAG, named-limit, node-loop, and human-gate semantics. ADR-019 advances a bounded nested executable-scope slice before full milestone qualification. Current V1 scopes have explicit exports, stateful repeat, and composite predicates; the remaining target compiled-plan, bounded-history and migration contracts still require their own evidence. Unknown future syntax must fail validation rather than being flattened into different behavior.
 
 ## Completion protocol
 

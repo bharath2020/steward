@@ -1,0 +1,2 @@
+E2E evidence: /var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-bzeveR
+{"originalRevision":"b8fcaffa123b478aaeb5c5ffb53d5a598c6c3d5f","evidence":"/var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-bzeveR","run":"2026-09-07T22-10-36-452Z-eb0e79","temporalRunId":"01a07dec-5942-742a-826c-bedfc2cd4b17","result":{"review":{"approved":false}}}

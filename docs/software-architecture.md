@@ -222,7 +222,7 @@ This is an extraction map for the single current runtime, not an instruction to 
 | `src/cli/launcher.ts`; root `src/launcher.ts` wrapper; `src/config.ts`, `src/worker.ts` | RuntimeManager + lifecycle adapter + bootstrap/config and worker entrypoint. The launcher still hardcodes its database/log paths despite the store's runtime-directory override. |
 | `scripts/recovery-check.ts`, existing tests | Release/integration harness and owner-specific unit/contract fixtures. |
 
-One verified example of why this split matters: `ui/assets/app.js` currently re-evaluates loop predicates but does not handle `contains` or `truthy`, which `src/loop.ts` supports. Target snapshots carry the interpreter's outcome so web and TUI cannot disagree by implementing different predicates. The component/template extraction preserves this current behavior; it does not fix that gap.
+ADR-019 removes browser predicate evaluation. `ui/assets/graph-layout.js` resolves qualified instance IDs to authored definitions and formats interpreter loop outcomes; absent historical outcomes remain unknown. `ui/assets/app.js` exposes nested scope instances in the inspector. These helpers own presentation only, never scope expansion, readiness, or acceptance. The broader shared web/TUI presentation extraction remains target work.
 
 UI templates share a single application behavior layer. The server accepts only known component tokens and public asset paths; layouts and themes do not select another interpreter or provider. Keep appearance choices in browser preferences and branding in `ui/brand.json`. A future template must preserve mount points and operator drafts and must not duplicate command submission or infer a different run status.
 

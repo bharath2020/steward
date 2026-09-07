@@ -1,0 +1,47 @@
+TAP version 13
+# Subtest: opt-in session identity is checked at the Activity boundary
+    # Subtest: reject mismatched workspace identity without invoking provider or rebinding heartbeat
+    ok 1 - reject mismatched workspace identity without invoking provider or rebinding heartbeat
+      ---
+      duration_ms: 14.182209
+      type: 'test'
+      ...
+    # Subtest: reject mismatched provider identity without invoking provider or rebinding heartbeat
+    ok 2 - reject mismatched provider identity without invoking provider or rebinding heartbeat
+      ---
+      duration_ms: 3.447083
+      type: 'test'
+      ...
+    # Subtest: reject mismatched session identity without invoking provider or rebinding heartbeat
+    ok 3 - reject mismatched session identity without invoking provider or rebinding heartbeat
+      ---
+      duration_ms: 2.256583
+      type: 'test'
+      ...
+    # Subtest: latest matching dispatch checkpoint takes precedence over prior iteration seed
+    ok 4 - latest matching dispatch checkpoint takes precedence over prior iteration seed
+      ---
+      duration_ms: 305.539416
+      type: 'test'
+      ...
+    # Subtest: accepted receipt recovery restores the bound session without another provider call
+    ok 5 - accepted receipt recovery restores the bound session without another provider call
+      ---
+      duration_ms: 53.320959
+      type: 'test'
+      ...
+    1..5
+ok 1 - opt-in session identity is checked at the Activity boundary
+  ---
+  duration_ms: 407.42
+  type: 'test'
+  ...
+1..1
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 587.367459

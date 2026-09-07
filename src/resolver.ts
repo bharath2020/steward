@@ -4,7 +4,7 @@ function readPath(value: JsonValue | undefined, path: string, reference: string)
   const parts = path.split(".").filter(Boolean);
   let cursor: JsonValue | undefined = value;
   for (const part of parts) {
-    if (cursor === null || typeof cursor !== "object" || Array.isArray(cursor) || !(part in cursor)) {
+    if (cursor === null || typeof cursor !== "object" || Array.isArray(cursor) || !Object.hasOwn(cursor, part)) {
       throw new Error(`Reference ${reference} could not resolve segment ${part}`);
     }
     cursor = cursor[part];
@@ -17,7 +17,14 @@ export function resolveReference(
   reference: string,
   initialInput: JsonValue,
   outputs: Record<string, JsonValue>,
+  state?: JsonValue,
+  output?: JsonValue,
 ): JsonValue {
+  for (const [prefix, value] of [["$state", state], ["$output", output]] as const) {
+    if (value !== undefined && (reference === prefix || reference.startsWith(`${prefix}.`))) {
+      return readPath(value, reference === prefix ? "" : reference.slice(prefix.length + 1), reference);
+    }
+  }
   if (reference === "$input") return initialInput;
   if (reference.startsWith("$input.")) {
     return readPath(initialInput, reference.slice("$input.".length), reference);
@@ -33,14 +40,14 @@ export function resolveReference(
   return reference;
 }
 
-function resolveValue(value: JsonValue, initialInput: JsonValue, outputs: Record<string, JsonValue>): JsonValue {
+export function resolveValue(value: JsonValue, initialInput: JsonValue, outputs: Record<string, JsonValue>, state?: JsonValue, output?: JsonValue): JsonValue {
   if (typeof value === "string" && value.startsWith("$")) {
-    return resolveReference(value, initialInput, outputs);
+    return resolveReference(value, initialInput, outputs, state, output);
   }
-  if (Array.isArray(value)) return value.map((item) => resolveValue(item, initialInput, outputs));
+  if (Array.isArray(value)) return value.map((item) => resolveValue(item, initialInput, outputs, state, output));
   if (value !== null && typeof value === "object") {
     return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, resolveValue(item, initialInput, outputs)]),
+      Object.entries(value).map(([key, item]) => [key, resolveValue(item, initialInput, outputs, state, output)]),
     );
   }
   return value;
@@ -50,9 +57,10 @@ export function resolveNodeInputs(
   node: WorkflowNode,
   initialInput: JsonValue,
   outputs: Record<string, JsonValue>,
+  state?: JsonValue,
 ): Record<string, JsonValue> {
   return Object.fromEntries(
-    Object.entries(node.inputs).map(([key, value]) => [key, resolveValue(value, initialInput, outputs)]),
+    Object.entries(node.inputs).map(([key, value]) => [key, resolveValue(value, initialInput, outputs, state)]),
   );
 }
 

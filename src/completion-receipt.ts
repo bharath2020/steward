@@ -6,6 +6,7 @@ import type {
   AgentExecutionInput,
   AgentExecutionResult,
   JsonValue,
+  ProviderSessionAffinity,
 } from "./contracts";
 import { runDirectory, writeJsonArtifact } from "./store";
 
@@ -94,7 +95,7 @@ async function readReceipt(path: string): Promise<AgentCompletionReceipt | undef
   }
 }
 
-async function writeJsonImmutably(path: string, value: unknown): Promise<void> {
+export async function writeJsonImmutably(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   const serialized = `${JSON.stringify(value, null, 2)}\n`;
   const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
@@ -118,6 +119,7 @@ export function buildCompletionReceipt(input: {
   outputSchemaSha256: string;
   output: JsonValue;
   providerSessionId?: string;
+  sessionAffinity?: ProviderSessionAffinity;
   completedAt: string;
 }): AgentCompletionReceipt {
   const outputSha256 = sha256Json(input.output);
@@ -137,6 +139,7 @@ export function buildCompletionReceipt(input: {
     completedAt: input.completedAt,
     output: input.output,
     ...(input.providerSessionId ? { providerSessionId: input.providerSessionId } : {}),
+    ...(input.sessionAffinity ? { sessionAffinity: input.sessionAffinity } : {}),
   };
   return { ...body, receiptSha256: sha256Json(body) };
 }
@@ -164,6 +167,7 @@ export function validateCompletionReceipt(
     || receipt.promptSha256 !== expected.promptSha256
     || receipt.outputSchemaSha256 !== expected.outputSchemaSha256
   ) throw new Error("Completion receipt identity does not match the dispatched agent turn.");
+  if (receipt.sessionAffinity && (receipt.sessionAffinity.provider !== receipt.provider || receipt.sessionAffinity.sessionId !== receipt.providerSessionId || !receipt.sessionAffinity.canonicalWorkspace)) throw new Error("Completion receipt session identity is invalid.");
   if (receipt.outputSha256 !== sha256Json(receipt.output)) {
     throw new Error("Completion receipt output hash does not match its embedded output.");
   }
@@ -196,6 +200,7 @@ export async function recoverCompletionReceipt(input: {
   return {
     output: receipt.output,
     ...(receipt.providerSessionId ? { providerSessionId: receipt.providerSessionId } : {}),
+    ...(receipt.sessionAffinity ? { sessionAffinity: receipt.sessionAffinity } : {}),
     recoveredFromReceipt: true,
     receiptSha256: receipt.receiptSha256,
   };
@@ -207,6 +212,7 @@ export async function commitCompletionReceipt(input: {
   outputSchemaSha256: string;
   output: JsonValue;
   providerSessionId?: string;
+  sessionAffinity?: ProviderSessionAffinity;
   afterPrimary?: () => Promise<void>;
 }): Promise<AgentCompletionReceipt> {
   const paths = completionPaths(input.execution);

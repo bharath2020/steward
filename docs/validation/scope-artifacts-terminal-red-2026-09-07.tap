@@ -1,0 +1,100 @@
+TAP version 13
+# Subtest: scope artifact acceptance verifies declared exports and committed child evidence
+    # Subtest: identical recommit preserves bytes and binds schema and child receipt hash
+    ok 1 - identical recommit preserves bytes and binds schema and child receipt hash
+      ---
+      duration_ms: 39.122792
+      type: 'test'
+      ...
+    # Subtest: rejects output that violates inferred schema before publication
+    ok 2 - rejects output that violates inferred schema before publication
+      ---
+      duration_ms: 7.252792
+      type: 'test'
+      ...
+    # Subtest: rejects schema-valid output that disagrees with export binding
+    ok 3 - rejects schema-valid output that disagrees with export binding
+      ---
+      duration_ms: 6.150458
+      type: 'test'
+      ...
+    # Subtest: rejects incomplete child set
+    ok 4 - rejects incomplete child set
+      ---
+      duration_ms: 3.820708
+      type: 'test'
+      ...
+    # Subtest: rejects absent accepted child receipts despite completed projection
+    ok 5 - rejects absent accepted child receipts despite completed projection
+      ---
+      duration_ms: 5.288417
+      type: 'test'
+      ...
+    # Subtest: rejects corrupted child output
+    ok 6 - rejects corrupted child output
+      ---
+      duration_ms: 4.526709
+      type: 'test'
+      ...
+    # Subtest: rejects corrupted child receipt
+    ok 7 - rejects corrupted child receipt
+      ---
+      duration_ms: 4.285084
+      type: 'test'
+      ...
+    # Subtest: scope binds the terminal loop receipt when iterations return identical values
+    ok 8 - scope binds the terminal loop receipt when iterations return identical values
+      ---
+      duration_ms: 10.233958
+      type: 'test'
+      ...
+    # Subtest: earlier equal output cannot replace a missing terminal loop receipt
+    not ok 9 - earlier equal output cannot replace a missing terminal loop receipt
+      ---
+      duration_ms: 10.919042
+      type: 'test'
+      location: '/Users/bharath2020/Documents/projects/steward/tests/scope-artifacts.test.ts:2:7978'
+      failureType: 'testCodeFailure'
+      error: 'Missing expected rejection.'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+      operator: 'rejects'
+      stack: |-
+        async TestContext.<anonymous> (/Users/bharath2020/Documents/projects/steward/tests/scope-artifacts.test.ts:101:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (/Users/bharath2020/Documents/projects/steward/tests/scope-artifacts.test.ts:97:3)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: parent refuses nested scope evidence whose child provenance was corrupted
+    ok 10 - parent refuses nested scope evidence whose child provenance was corrupted
+      ---
+      duration_ms: 7.271333
+      type: 'test'
+      ...
+    # Subtest: refuses to replace corrupted committed scope evidence
+    ok 11 - refuses to replace corrupted committed scope evidence
+      ---
+      duration_ms: 5.93575
+      type: 'test'
+      ...
+    1..11
+not ok 1 - scope artifact acceptance verifies declared exports and committed child evidence
+  ---
+  duration_ms: 113.278209
+  type: 'test'
+  location: '/Users/bharath2020/Documents/projects/steward/tests/scope-artifacts.test.ts:2:1184'
+  failureType: 'subtestsFailed'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..1
+# tests 12
+# suites 0
+# pass 10
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 276.722042

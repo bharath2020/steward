@@ -2,7 +2,7 @@ export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 
 export type AgentProvider = "simulated" | "codex";
-export type NodeKind = "agent" | "human";
+export type NodeKind = "agent" | "human" | "scope";
 export type OutputType =
   | "string"
   | "number"
@@ -29,15 +29,21 @@ export interface WorkflowGroup {
   max_parallelism?: number;
 }
 
+export type LoopPredicate =
+  | { path: string; operator: LoopOperator; value?: JsonValue }
+  | { all: LoopPredicate[] }
+  | { any: LoopPredicate[] }
+  | { not: LoopPredicate };
+
 export interface NodeLoop {
   max_iterations: number;
   carry_as: string;
   on_exhaustion: "fail" | "accept_last";
-  until: {
-    path: string;
-    operator: LoopOperator;
-    value?: JsonValue;
-  };
+  until: LoopPredicate;
+  predicate_version?: 2;
+  agent_sessions?: "fresh" | "resume";
+  initial?: Record<string, JsonValue>;
+  next?: Record<string, JsonValue>;
 }
 
 export interface NodeForEach {
@@ -70,6 +76,8 @@ export interface WorkflowNode {
   inputs: Record<string, JsonValue>;
   outputs: Record<string, OutputType>;
   outputSchema: JsonSchema;
+  nodes?: WorkflowNode[];
+  exports?: Record<string, JsonValue>;
   demo_output?: JsonValue;
   demo_outputs?: JsonValue[];
   delay_ms?: number;
@@ -112,11 +120,18 @@ export type AgentFailureKind =
   | "integrity_error"
   | "unknown";
 
+export interface ProviderSessionAffinity {
+  provider: AgentProvider;
+  canonicalWorkspace: string;
+  sessionId: string;
+}
+
 export interface AgentFailureSummary {
   schema: "agent-failure.v1";
   kind: AgentFailureKind;
   message: string;
   providerSessionId?: string;
+  sessionAffinity?: ProviderSessionAffinity;
 }
 
 export type AgentRecoveryAction = "retry_same_session" | "retry_fresh_session" | "abort_workflow";
@@ -199,7 +214,10 @@ export type AgentMessageInput = Omit<AgentMessage, "seq" | "at">;
 export interface NodeRunState {
   id: string;
   title: string;
-  agent: AgentProvider | "human";
+  agent: AgentProvider | "human" | "scope";
+  definitionId?: string;
+  parentId?: string;
+  loopOutcome?: "condition_met" | "exhausted_accepted" | "exhausted_failed";
   group?: string;
   status: NodeStatus;
   phase: string;
@@ -262,6 +280,8 @@ export interface AgentExecutionInput {
   delayMs?: number;
   wave: number;
   iteration: number;
+  simulationIteration?: number;
+  captureSessionAffinity?: true;
   queueItem?: {
     index: number;
     count: number;
@@ -269,6 +289,7 @@ export interface AgentExecutionInput {
   recoveryCycle: number;
   receiptToken: string;
   providerSessionId?: string;
+  sessionAffinity?: ProviderSessionAffinity;
   recovery?: {
     action: Exclude<AgentRecoveryAction, "abort_workflow">;
     failureKind: AgentFailureKind;
@@ -279,6 +300,7 @@ export interface AgentExecutionInput {
 export interface AgentExecutionResult {
   output: JsonValue;
   providerSessionId?: string;
+  sessionAffinity?: ProviderSessionAffinity;
   recoveredFromReceipt: boolean;
   receiptSha256: string;
 }
@@ -296,6 +318,7 @@ export interface AgentHeartbeatCheckpoint {
   startedAt: string;
   lastProviderEventAt?: string;
   providerSessionId?: string;
+  sessionAffinity?: ProviderSessionAffinity;
   processId?: number;
 }
 
@@ -315,5 +338,6 @@ export interface AgentCompletionReceipt {
   completedAt: string;
   output: JsonValue;
   providerSessionId?: string;
+  sessionAffinity?: ProviderSessionAffinity;
   receiptSha256: string;
 }

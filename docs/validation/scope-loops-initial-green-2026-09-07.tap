@@ -1,0 +1,116 @@
+TAP version 13
+# E2E evidence: /var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-4zFbkn
+# Subtest: scope loop boundaries through real Temporal
+    # Subtest: nested loops complete with one global leaf permit and independent iteration counters
+    ok 1 - nested loops complete with one global leaf permit and independent iteration counters
+      ---
+      duration_ms: 4276.687416
+      type: 'test'
+      ...
+    # Subtest: scope exhaustion fail exposes its outcome and gates dependents
+    ok 2 - scope exhaustion fail exposes its outcome and gates dependents
+      ---
+      duration_ms: 1301.217625
+      type: 'test'
+      ...
+    # Subtest: scope exhaustion accept_last exposes its outcome and gates dependents
+    ok 3 - scope exhaustion accept_last exposes its outcome and gates dependents
+      ---
+      duration_ms: 1906.468875
+      type: 'test'
+      ...
+    # Subtest: invalid nested operand is an error even when another all operand is false
+    ok 4 - invalid nested operand is an error even when another all operand is false
+      ---
+      duration_ms: 798.187667
+      type: 'test'
+      ...
+    # Subtest: reject undeclared-sibling before submitting runtime work
+    ok 5 - reject undeclared-sibling before submitting runtime work
+      ---
+      duration_ms: 241.914083
+      type: 'test'
+      ...
+    # Subtest: reject out-of-scope-reference before submitting runtime work
+    ok 6 - reject out-of-scope-reference before submitting runtime work
+      ---
+      duration_ms: 238.877958
+      type: 'test'
+      ...
+    # Subtest: reject state-without-loop before submitting runtime work
+    ok 7 - reject state-without-loop before submitting runtime work
+      ---
+      duration_ms: 244.490708
+      type: 'test'
+      ...
+    # Subtest: reject output-outside-next before submitting runtime work
+    ok 8 - reject output-outside-next before submitting runtime work
+      ---
+      duration_ms: 242.508959
+      type: 'test'
+      ...
+    # Subtest: reject conflicting-dependency-aliases before submitting runtime work
+    ok 9 - reject conflicting-dependency-aliases before submitting runtime work
+      ---
+      duration_ms: 243.041334
+      type: 'test'
+      ...
+    # Subtest: reject predicate-missing-value before submitting runtime work
+    ok 10 - reject predicate-missing-value before submitting runtime work
+      ---
+      duration_ms: 243.809583
+      type: 'test'
+      ...
+    # Subtest: reject expansion-limit before submitting runtime work
+    ok 11 - reject expansion-limit before submitting runtime work
+      ---
+      duration_ms: 240.79425
+      type: 'test'
+      ...
+    # Subtest: reject numeric-predicate-string-value before submitting runtime work
+    ok 12 - reject numeric-predicate-string-value before submitting runtime work
+      ---
+      duration_ms: 245.627584
+      type: 'test'
+      ...
+    1..12
+ok 1 - scope loop boundaries through real Temporal
+  ---
+  duration_ms: 12421.903042
+  type: 'test'
+  ...
+# E2E evidence: /var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-UJU4gK
+# Subtest: scope loops through CLI and real Temporal
+    # Subtest: baseline proves isolated Temporal and receipt harness are healthy
+    ok 1 - baseline proves isolated Temporal and receipt harness are healthy
+      ---
+      duration_ms: 1141.230167
+      type: 'test'
+      ...
+    # Subtest: draft and review repeat with explicit carried state before downstream runs once
+    ok 2 - draft and review repeat with explicit carried state before downstream runs once
+      ---
+      duration_ms: 1756.477834
+      type: 'test'
+      ...
+    # Subtest: review fans out to a group and repeats until both succeed in the same iteration
+    ok 3 - review fans out to a group and repeats until both succeed in the same iteration
+      ---
+      duration_ms: 4699.100334
+      type: 'test'
+      ...
+    1..3
+ok 2 - scope loops through CLI and real Temporal
+  ---
+  duration_ms: 9804.718625
+  type: 'test'
+  ...
+1..2
+# tests 17
+# suites 0
+# pass 17
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 22707.023833

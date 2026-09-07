@@ -11,6 +11,8 @@ import type {
   WorkflowDefinition,
   WorkflowGroup,
   NodeLoop,
+  LoopPredicate,
+  LoopOperator,
   NodeForEach,
   WorkflowNode,
 } from "./contracts";
@@ -52,27 +54,46 @@ function schemaFor(outputs: Record<string, OutputType>): JsonSchema {
   return { type: "object", properties, required: Object.keys(outputs), additionalProperties: false };
 }
 
-function normalizeLoop(id: string, raw: unknown): NodeLoop | undefined {
+function normalizePredicate(raw: unknown, label: string, depth = 0): LoopPredicate {
+  if (!isRecord(raw) || depth > 16) fail(`${label} must be a bounded predicate`);
+  const composites = ["all", "any", "not"].filter(key => Object.hasOwn(raw, key));
+  if (composites.length) {
+    if (composites.length !== 1 || Object.keys(raw).length !== 1) fail(`${label} requires exactly one predicate form`);
+    const key = composites[0];
+    if (key === "not") return { not: normalizePredicate(raw.not, label, depth + 1) };
+    const children = raw[key];
+    if (!Array.isArray(children) || children.length === 0 || children.length > 32) fail(`${label}.${key} requires 1 to 32 predicates`);
+    const predicates = children.map(child => normalizePredicate(child, label, depth + 1));
+    return key === "all" ? { all: predicates } : { any: predicates };
+  }
+  if (Object.keys(raw).some(key => !["path", "operator", "value"].includes(key))) fail(`${label} has an unknown field`);
+  if (typeof raw.path !== "string" || !/^[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*$/.test(raw.path)) fail(`${label}.path is required`);
+  const operators = ["equals", "not_equals", "greater_than", "greater_than_or_equal", "less_than", "less_than_or_equal", "contains", "truthy"];
+  if (!operators.includes(String(raw.operator))) fail(`${label}.operator is unsupported`);
+  if (raw.operator !== "truthy" && !Object.hasOwn(raw, "value")) fail(`${label}.value is required`);
+  if (["greater_than", "greater_than_or_equal", "less_than", "less_than_or_equal"].includes(String(raw.operator)) && typeof raw.value !== "number") fail(`${label}.value must be numeric`);
+  return { path: raw.path, operator: raw.operator as LoopOperator, value: raw.value as JsonValue | undefined };
+}
+
+function normalizeLoop(id: string, raw: unknown, scope = false): NodeLoop | undefined {
   if (raw === undefined) return undefined;
   if (!isRecord(raw) || !isRecord(raw.until)) fail(`node ${id}.loop requires an until condition`);
-  const maxIterations = raw.max_iterations ?? 3;
-  if (!Number.isInteger(maxIterations) || Number(maxIterations) < 1 || Number(maxIterations) > 20) {
-    fail(`node ${id}.loop.max_iterations must be between 1 and 20`);
-  }
-  if (typeof raw.until.path !== "string" || !raw.until.path) fail(`node ${id}.loop.until.path is required`);
-  const operators = ["equals", "not_equals", "greater_than", "greater_than_or_equal", "less_than", "less_than_or_equal", "contains", "truthy"];
-  if (!operators.includes(String(raw.until.operator))) fail(`node ${id}.loop.until.operator is unsupported`);
+  const allowed = scope ? ["max_iterations", "on_exhaustion", "until", "initial", "next", "agent_sessions"] : ["max_iterations", "on_exhaustion", "until", "carry_as"];
+  if (Object.keys(raw).some(key => !allowed.includes(key))) fail(`node ${id}.loop has an unsupported field`);
+  if (raw.agent_sessions !== undefined && raw.agent_sessions !== "fresh" && raw.agent_sessions !== "resume") fail(`node ${id}.loop.agent_sessions must be fresh or resume`);
+  const maxIterations = raw.max_iterations ?? (scope ? undefined : 3);
+  if (!Number.isInteger(maxIterations) || Number(maxIterations) < 1 || Number(maxIterations) > 20) fail(`node ${id}.loop.max_iterations must be between 1 and 20`);
   const onExhaustion = raw.on_exhaustion ?? "fail";
   if (onExhaustion !== "fail" && onExhaustion !== "accept_last") fail(`node ${id}.loop.on_exhaustion is invalid`);
+  for (const key of ["initial", "next"]) if (raw[key] !== undefined && !isRecord(raw[key])) fail(`node ${id}.loop.${key} must be an object`);
   return {
     max_iterations: Number(maxIterations),
     carry_as: typeof raw.carry_as === "string" && raw.carry_as ? raw.carry_as : "previous_output",
     on_exhaustion: onExhaustion,
-    until: {
-      path: raw.until.path,
-      operator: raw.until.operator as NodeLoop["until"]["operator"],
-      value: raw.until.value as JsonValue | undefined,
-    },
+    until: normalizePredicate(raw.until, `node ${id}.loop.until`),
+    predicate_version: 2,
+    ...(scope && raw.agent_sessions !== undefined ? { agent_sessions: raw.agent_sessions as "fresh" | "resume" } : {}),
+    ...(scope ? { initial: (raw.initial ?? {}) as Record<string, JsonValue>, next: (raw.next ?? {}) as Record<string, JsonValue> } : {}),
   };
 }
 
@@ -100,6 +121,7 @@ function normalizeForEach(id: string, raw: unknown, defaultMaxParallelism: numbe
 }
 
 function validatePromptSource(id: string, raw: Record<string, unknown>): void {
+  if (raw.kind === "scope") return;
   const hasFile = Object.hasOwn(raw, "prompt_file");
   if (raw.kind === "human") {
     if (hasFile) fail(`node ${id}.prompt_file is not supported for human input; use question`);
@@ -115,17 +137,60 @@ function validatePromptSource(id: string, raw: Record<string, unknown>): void {
   }
 }
 
+function exportSchema(value: JsonValue, children: WorkflowNode[]): Record<string, JsonValue> {
+  if (typeof value === "string" && value.startsWith("$")) {
+    const match = /^\$nodes\.([a-zA-Z0-9_-]+)\.output(?:\.(.+))?$/.exec(value);
+    if (!match) return {};
+    const child = children.find(node => node.id === match[1]);
+    if (!child) return {};
+    let schema: Record<string, JsonValue> = child.for_each
+      ? { type: "array", items: child.outputSchema as unknown as JsonValue }
+      : child.outputSchema as unknown as Record<string, JsonValue>;
+    for (const key of match[2]?.split(".") ?? []) {
+      schema = ((schema.properties as Record<string, JsonValue> | undefined)?.[key] ?? {}) as Record<string, JsonValue>;
+    }
+    return schema;
+  }
+  if (value === null) return { type: "null" };
+  if (Array.isArray(value)) return { type: "array" };
+  if (typeof value === "object") return { type: "object", properties: Object.fromEntries(Object.entries(value).map(([key, item]) => [key, exportSchema(item, children)])), required: Object.keys(value), additionalProperties: false };
+  return { type: typeof value };
+}
+
 function normalizeNode(
   id: string,
   raw: unknown,
   defaultProvider: AgentProvider,
   defaultMaxParallelism: number,
   promptFiles: ReadonlyMap<string, string>,
+  depth = 0,
 ): WorkflowNode {
   if (!/^[a-z][a-z0-9_-]*$/.test(id)) fail(`node id ${id} must use lowercase letters, numbers, - or _`);
   if (!isRecord(raw)) fail(`node ${id} must be an object`);
   const kind = raw.kind === undefined ? "agent" : raw.kind;
-  if (kind !== "agent" && kind !== "human") fail(`node ${id}.kind must be agent or human`);
+  if (kind !== "agent" && kind !== "human" && kind !== "scope") fail(`node ${id}.kind must be agent, human, or scope`);
+  if (depth > 8) fail(`node ${id} exceeds scope nesting limit 8`);
+  if (raw.needs !== undefined && raw.depends_on !== undefined) fail(`node ${id} cannot combine needs and depends_on`);
+  if (kind === "scope") {
+    const allowed = ["kind", "title", "needs", "depends_on", "inputs", "outputs", "nodes", "loop"];
+    if (Object.keys(raw).some(key => !allowed.includes(key))) fail(`scope ${id} has an unsupported field`);
+    if (!isRecord(raw.nodes) || !Object.keys(raw.nodes).length) fail(`scope ${id}.nodes must be a non-empty object`);
+    if (!isRecord(raw.outputs) || !Object.keys(raw.outputs).length) fail(`scope ${id}.outputs must be a non-empty object`);
+    const needs = raw.needs ?? raw.depends_on ?? [];
+    if (!Array.isArray(needs) || needs.some(item => typeof item !== "string")) fail(`node ${id}.needs must be a list`);
+    if (raw.inputs !== undefined && !isRecord(raw.inputs)) fail(`node ${id}.inputs must be an object`);
+    const children = Object.entries(raw.nodes).map(([childId, value]) => normalizeNode(childId, value, defaultProvider, defaultMaxParallelism, promptFiles, depth + 1));
+    const exports = raw.outputs as Record<string, JsonValue>;
+    const outputSchema: JsonSchema = { type: "object", properties: Object.fromEntries(Object.entries(exports).map(([key, binding]) => [key, exportSchema(binding, children)])), required: Object.keys(exports), additionalProperties: false };
+    return {
+      id, title: typeof raw.title === "string" ? raw.title : id, kind, agent: defaultProvider,
+      needs: [...new Set(needs as string[])], prompt: "", inputs: (raw.inputs ?? {}) as Record<string, JsonValue>,
+      outputs: {}, outputSchema, exports,
+      nodes: children,
+      loop: normalizeLoop(id, raw.loop, true),
+    };
+  }
+  if (raw.nodes !== undefined) fail(`node ${id}.nodes is only supported for scope`);
   validatePromptSource(id, raw);
   const filePath = typeof raw.prompt_file === "string" ? raw.prompt_file : undefined;
   const prompt = filePath === undefined ? raw.prompt : promptFiles.get(filePath);
@@ -152,7 +217,7 @@ function normalizeNode(
     outputs[name] = type as OutputType;
   }
 
-  const needs = raw.needs === undefined ? [] : raw.needs;
+  const needs = raw.needs ?? raw.depends_on ?? [];
   if (!Array.isArray(needs) || needs.some((item) => typeof item !== "string")) fail(`node ${id}.needs must be a list`);
   const inputs = kind === "human" ? { question: raw.question } : raw.inputs === undefined ? {} : raw.inputs;
   if (!isRecord(inputs)) fail(`node ${id}.inputs must be an object`);
@@ -228,10 +293,61 @@ function validateGraph(nodes: WorkflowNode[]): void {
       }
       continue;
     }
-    if (!dependency || outputName === undefined || !dependency.outputs[outputName]?.endsWith("[]")) {
+    if (!dependency || outputName === undefined || dependency.outputSchema.properties[outputName]?.type !== "array") {
       fail(`node ${node.id}.for_each.items must reference an array output`);
     }
   }
+}
+
+function validateScopes(nodes: WorkflowNode[], inputKeys?: string[], stateKeys?: string[], strict = nodes.some(node => node.kind === "scope")): void {
+  validateGraph(nodes);
+  const byId = Object.fromEntries(nodes.map(node => [node.id, node]));
+  const references = (value: JsonValue, dependencies: string[], inputs: string[] | undefined, state: string[] | undefined, outputKeys?: string[]): void => {
+    if (Array.isArray(value)) { value.forEach(item => references(item, dependencies, inputs, state, outputKeys)); return; }
+    if (value && typeof value === "object") { Object.values(value).forEach(item => references(item, dependencies, inputs, state, outputKeys)); return; }
+    if (typeof value !== "string" || !value.startsWith("$")) return;
+    if (!strict) return;
+    const match = /^\$(input|state|output|nodes)(?:\.([a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*))?$/.exec(value);
+    if (!match) fail(`unsupported reference ${value}`);
+    const [, root, path] = match;
+    const parts = path?.split(".") ?? [];
+    if (root === "nodes") {
+      const [id, output, key] = parts;
+      if (!id || output !== "output" || !byId[id]) fail(`invalid node output reference ${value}`);
+      if (!dependencies.includes(id)) fail(`reference ${value} requires ${id} in needs or depends_on`);
+      const node = byId[id];
+      if (key && !node.for_each && !Object.hasOwn(node.exports ?? node.outputs, key)) fail(`unknown output in ${value}`);
+    } else {
+      const keys = root === "input" ? inputs : root === "state" ? state : outputKeys;
+      if (root !== "input" && keys === undefined) fail(`reference ${value} is unavailable in this context`);
+      if (keys && parts.length && !keys.includes(parts[0])) fail(`unknown field in ${value}`);
+    }
+  };
+  const ancestors = (ids: string[]): string[] => [...new Set(ids.flatMap(id => [id, ...ancestors(byId[id]?.needs ?? [])]))];
+  for (const node of nodes) {
+    references(node.inputs, ancestors(node.needs), inputKeys, stateKeys);
+    if (node.for_each) references(node.for_each.items, node.needs, inputKeys, stateKeys);
+    if (node.kind === "scope") {
+      const localInputs = Object.keys(node.inputs);
+      const localState = node.loop ? Object.keys(node.loop.initial ?? {}) : stateKeys;
+      if (node.loop) {
+        references(node.loop.initial ?? {}, [], localInputs, undefined);
+        const nextKeys = Object.keys(node.loop.next ?? {});
+        if (JSON.stringify([...localState!].sort()) !== JSON.stringify(nextKeys.sort())) fail(`scope ${node.id}.loop.next must provide exactly the initial state keys`);
+        references(node.loop.next ?? {}, [], localInputs, localState, Object.keys(node.exports!));
+      }
+      validateScopes(node.nodes!, localInputs, localState, true);
+      // Export references belong to the child graph and can read every committed child.
+      const exportNode = { ...node, id: "@scope_exports", kind: "agent" as const, inputs: node.exports!, needs: node.nodes!.map(child => child.id), nodes: undefined, loop: undefined, exports: undefined };
+      validateScopeExports(exportNode, node.nodes!, localInputs, localState);
+    }
+  }
+}
+
+function validateScopeExports(exportNode: WorkflowNode, children: WorkflowNode[], inputKeys: string[], stateKeys?: string[]): void {
+  // Reuse the reference validator without executing another scope expansion.
+  const synthetic = [...children.map(child => ({ ...child, nodes: undefined, kind: "agent" as const, inputs: {}, loop: undefined, for_each: undefined })), exportNode];
+  validateScopes(synthetic, inputKeys, stateKeys, true);
 }
 
 function parseDocument(source: string): Record<string, unknown> & { nodes: Record<string, unknown>; name: string } {
@@ -289,9 +405,13 @@ function compileWorkflow(
   nodes.forEach((node) => {
     if (node.group && !groupIds.has(node.group)) fail(`node ${node.id} references unknown group ${node.group}`);
   });
-  validateGraph(nodes);
+  const flatten = (items: WorkflowNode[]): WorkflowNode[] => items.flatMap(node => [node, ...flatten(node.nodes ?? [])]);
+  flatten(nodes).forEach(node => { if (node.group && !groupIds.has(node.group)) fail(`node ${node.id} references unknown group ${node.group}`); });
+  validateScopes(nodes);
+  const expansion = (items: WorkflowNode[]): number => items.reduce((sum, node) => sum + (node.loop?.max_iterations ?? 1) * (1 + expansion(node.nodes ?? [])), 0);
+  if (expansion(nodes) > 1000) fail("scope expansion exceeds 1000 step instances");
 
-  const resolvedPrompts = nodes.filter((node) => node.promptSource).map((node) => ({ id: node.id, prompt: node.prompt }));
+  const resolvedPrompts = flatten(nodes).filter((node) => node.promptSource).map((node) => ({ id: node.id, prompt: node.prompt }));
   // Keep inline definition identity stable while binding file contents when present.
   const canonical = JSON.stringify({ ...raw, sourcePath: undefined, ...(resolvedPrompts.length ? { resolvedPrompts } : {}) });
   return {
@@ -316,12 +436,13 @@ export async function loadWorkflow(filePath: string): Promise<WorkflowDefinition
   const raw = parseDocument(await readFile(absolute, "utf8"));
   const promptFiles = new Map<string, string>();
   const contentByPath = new Map<string, string>();
+  const sourceNodes = (nodes: Record<string, unknown>): [string, unknown][] => Object.entries(nodes).flatMap(([id, value]) => [[id, value] as [string, unknown], ...(isRecord(value) && value.kind === "scope" && isRecord(value.nodes) ? sourceNodes(value.nodes) : [])]);
   // Check every source declaration before reading any referenced file.
-  for (const [id, value] of Object.entries(raw.nodes)) {
+  for (const [id, value] of sourceNodes(raw.nodes)) {
     if (!isRecord(value)) fail(`node ${id} must be an object`);
     validatePromptSource(id, value);
   }
-  for (const [id, value] of Object.entries(raw.nodes)) {
+  for (const [id, value] of sourceNodes(raw.nodes)) {
     const node = value as Record<string, unknown>;
     if (typeof node.prompt_file !== "string") continue;
     const promptPath = resolve(dirname(absolute), node.prompt_file);

@@ -105,53 +105,7 @@ function fileName(value) {
   return value?.split("/").pop() ?? "—";
 }
 
-function readPath(value, path) {
-  return path.split(".").filter(Boolean).reduce((currentValue, segment) => {
-    if (!currentValue || typeof currentValue !== "object" || Array.isArray(currentValue)) return undefined;
-    return currentValue[segment];
-  }, value);
-}
-
-function loopConditionMet(loop, output) {
-  const actual = readPath(output, loop.until.path);
-  const expected = loop.until.value;
-  switch (loop.until.operator) {
-    case "equals": return actual === expected;
-    case "not_equals": return actual !== expected;
-    case "greater_than": return typeof actual === "number" && typeof expected === "number" && actual > expected;
-    case "greater_than_or_equal": return typeof actual === "number" && typeof expected === "number" && actual >= expected;
-    case "less_than": return typeof actual === "number" && typeof expected === "number" && actual < expected;
-    case "less_than_or_equal": return typeof actual === "number" && typeof expected === "number" && actual <= expected;
-    default: return false;
-  }
-}
-
-function loopOperator(operator) {
-  return ({
-    equals: "=",
-    not_equals: "≠",
-    greater_than: ">",
-    greater_than_or_equal: "≥",
-    less_than: "<",
-    less_than_or_equal: "≤",
-  })[operator] ?? operator;
-}
-
-function loopLabel(node, state) {
-  const current = Math.max(state.iterationCount ?? state.iteration ?? 0, state.status === "pending" ? 0 : 1);
-  const maximum = node.loop.max_iterations;
-  const field = node.loop.until.path.split(".").pop().replaceAll("_", " ").toUpperCase();
-  const condition = `${field} ${loopOperator(node.loop.until.operator)} ${String(node.loop.until.value)}`;
-  if (state.status === "running") return `ITERATION ${current} / ${maximum} · ${condition}`;
-  if (state.status === "awaiting_recovery") return `PAUSED ${current} / ${maximum} · RECOVERY`;
-  if (state.status === "failed") return `${current} / ${maximum} · LIMIT FAILED`;
-  if (state.status === "completed") {
-    return loopConditionMet(node.loop, state.output)
-      ? `${current} / ${maximum} · ${condition} · PASSED`
-      : `${current} / ${maximum} · LIMIT ACCEPTED`;
-  }
-  return `UP TO ${maximum} ITERATIONS · ${condition}`;
-}
+const { definitionNode, scopeInstances, predicateLabel, loopLabel } = WorkflowGraphLayout;
 
 function showToast(message) {
   text(ui.toast, message);
@@ -358,7 +312,7 @@ function updateGraph(definition, run) {
     rendered.element.setAttribute("class", `node ${state.status} ${selectedNodeId === node.id ? "selected" : ""}`);
     rendered.element.setAttribute("aria-label", `${node.title}, ${state.status}`);
     fitGraphText(rendered.subtitle, state.phase, rendered.width - 32, rendered.measureSubtitle);
-    const provider = node.kind === "human" ? "Human input" : state.agent === "codex" ? "Codex" : "Simulated agent";
+    const provider = node.kind === "scope" ? "Scope" : node.kind === "human" ? "Human input" : state.agent === "codex" ? "Codex" : "Simulated agent";
     const metaValue = state.durationMs ? `${provider} · ${(state.durationMs / 1000).toFixed(1)}s` : provider;
     fitGraphText(rendered.meta, metaValue, rendered.metaWidth, rendered.measureMeta);
   });
@@ -395,7 +349,7 @@ function hideAuthoringNodeDetail() {
 }
 
 function renderAuthoringNodeDetail(definition, nodeId) {
-  const node = definition?.nodes.find((item) => item.id === nodeId);
+  const node = definitionNode(definition, nodeId);
   if (!node) {
     hideAuthoringNodeDetail();
     return;
@@ -405,7 +359,7 @@ function renderAuthoringNodeDetail(definition, nodeId) {
   details.className = "inspect-grid";
   [
     ["Node", node.id],
-    ["Type", node.kind === "human" ? "Human input" : node.agent],
+    ["Type", node.kind === "scope" ? "Scope" : node.kind === "human" ? "Human input" : node.agent],
     ["Group", group?.title ?? "—"],
     ["Needs", node.needs.join(", ") || "start"],
     ["Queue", node.for_each ? `${node.for_each.items} → ${node.for_each.as} · max ${node.for_each.max_parallelism}` : "—"],
@@ -418,15 +372,18 @@ function renderAuthoringNodeDetail(definition, nodeId) {
   );
   assignment.className = "authoring-node-prompt";
   const inputs = Object.entries(node.inputs);
-  const outputs = Object.entries(node.outputs);
+  const outputs = Object.entries(node.exports ?? node.outputs);
   ui["authoring-node-content"].replaceChildren(
     section("Configuration", details),
-    section(node.kind === "human" ? "Question" : "Prompt", assignment),
+    ...(node.kind === "scope" ? [section("Scope steps", definitionChildren(definition, node, nodeId))] : [section(node.kind === "human" ? "Question" : "Prompt", assignment)]),
     ...(inputs.length ? [section("Input bindings", keyValueList(inputs, "binding-list"))] : []),
     section("Output variables", keyValueList(outputs, "output-list")),
   );
+  if (nodeId.includes(".") && node.kind !== "scope") {
+    ui["authoring-node-content"].append(definitionChildren(definition, node, nodeId));
+  }
   text(ui["authoring-node-title"], node.title);
-  text(ui["authoring-node-kind"], node.kind === "human" ? "Human gate" : `${node.agent} agent`);
+  text(ui["authoring-node-kind"], node.kind === "scope" ? "Scope" : node.kind === "human" ? "Human gate" : `${node.agent} agent`);
   ui["authoring-node-detail"].hidden = false;
 }
 
@@ -543,6 +500,38 @@ function humanInputPanel(runId, request) {
     (answer) => submitHumanInput(runId, request.requestId, answer, draft));
 }
 
+function definitionChildren(definition, node, path) {
+  const list = document.createElement("div");
+  list.className = "scope-steps";
+  for (const child of node.nodes ?? []) {
+    const button = text(document.createElement("button"), `${child.title} · ${child.kind}`);
+    button.type = "button";
+    button.addEventListener("click", () => renderAuthoringNodeDetail(definition, `${path}.${child.id}`));
+    list.append(button);
+  }
+  if (path.includes(".")) {
+    const back = text(document.createElement("button"), "Back to parent scope");
+    back.type = "button";
+    back.className = "scope-back";
+    back.addEventListener("click", () => renderAuthoringNodeDetail(definition, path.split(".").slice(0, -1).join(".")));
+    list.append(back);
+  }
+  return list;
+}
+
+function executionChildren(run, parentId) {
+  const list = document.createElement("div");
+  list.className = "scope-steps";
+  for (const child of scopeInstances(run, parentId)) {
+    const button = text(document.createElement("button"), `${child.title} · ${child.status}\n${child.id}`);
+    button.type = "button";
+    button.addEventListener("click", () => { selectedNodeId = child.id; render(current); });
+    list.append(button);
+  }
+  if (!list.childElementCount) list.append(text(document.createElement("p"), "No child instances have started yet."));
+  return list;
+}
+
 function renderInspector(snapshot) {
   const { definition, run, initialInput } = snapshot;
   const nextSignature = JSON.stringify({
@@ -550,6 +539,7 @@ function renderInspector(snapshot) {
     nodeId: selectedNodeId,
     runStatus: run?.status,
     node: selectedNodeId ? run?.nodes?.[selectedNodeId] : undefined,
+    children: selectedNodeId ? scopeInstances(run, selectedNodeId) : undefined,
     messages: selectedNodeId ? snapshot.agentMessages?.[selectedNodeId] : undefined,
     initialInput: selectedNodeId ? undefined : initialInput,
   });
@@ -562,7 +552,7 @@ function renderInspector(snapshot) {
     ui["inspector-content"].append(text(document.createElement("p"), "Select a node to inspect its prompt, variable bindings, and committed output."));
     return;
   }
-  const node = definition.nodes.find((item) => item.id === selectedNodeId);
+  const node = definitionNode(definition, selectedNodeId);
   if (!node) {
     text(ui["inspector-title"], "Run contract");
     text(ui["inspector-status"], run.status);
@@ -574,20 +564,28 @@ function renderInspector(snapshot) {
     ui["inspector-content"].append(section("Identity", details), section("Initial input", jsonBlock(initialInput)));
     return;
   }
-  const state = run.nodes[node.id];
+  const state = run.nodes[selectedNodeId];
+  if (!state) return;
+  if (state.parentId) {
+    const back = text(document.createElement("button"), "Back to parent scope");
+    back.type = "button";
+    back.className = "scope-back";
+    back.addEventListener("click", () => { selectedNodeId = state.parentId; render(current); });
+    ui["inspector-content"].append(back);
+  }
   const pendingRecoveries = (state.recoveryRequests ?? []).filter((request) => request.status === "waiting");
   text(ui["inspector-title"], node.title);
   text(ui["inspector-status"], state.status);
   const details = document.createElement("dl");
   details.className = "inspect-grid";
   const group = definition.groups.find((item) => item.id === node.group);
-  [["Node", node.id], ["Group", group?.title ?? "—"], ["Configured", node.kind === "human" ? "human input" : node.agent], ["Executing", state.agent], ["Needs", node.needs.join(", ") || "start"], ["Attempt", state.attempt ?? "—"], ["Recovery", pendingRecoveries.length || "—"], ["Iteration", node.loop ? `${state.iteration ?? 0} / ${node.loop.max_iterations}` : "—"], ["Queue", node.for_each ? `${state.completedItems ?? 0} / ${state.totalItems ?? "?"} · max ${node.for_each.max_parallelism}` : "—"], ["Duration", state.durationMs ? `${(state.durationMs / 1000).toFixed(1)}s` : "—"]].forEach(([key, value]) => {
+  [["Node", state.id], ["Parent scope", state.parentId ?? "—"], ["Group", group?.title ?? "—"], ["Configured", node.kind === "scope" ? "scope" : node.kind === "human" ? "human input" : node.agent], ["Executing", state.agent], ["Needs", (state.needs ?? node.needs).join(", ") || "start"], ["Attempt", node.kind === "scope" ? "—" : state.attempt ?? "—"], ["Recovery", pendingRecoveries.length || "—"], ["Iteration", node.loop ? `${state.iteration ?? 0} / ${node.loop.max_iterations}` : "—"], ["Queue", node.for_each ? `${state.completedItems ?? 0} / ${state.totalItems ?? "?"} · max ${node.for_each.max_parallelism}` : "—"], ["Duration", state.durationMs ? `${(state.durationMs / 1000).toFixed(1)}s` : "—"]].forEach(([key, value]) => {
     details.append(text(document.createElement("dt"), key), text(document.createElement("dd"), value));
   });
   const prompt = text(document.createElement("p"), node.prompt);
   const bindings = keyValueList(Object.entries(node.inputs), "binding-list");
-  const outputs = keyValueList(Object.entries(node.outputs), "output-list");
-  const messages = snapshot.agentMessages?.[node.id] ?? [];
+  const outputs = keyValueList(Object.entries(node.exports ?? node.outputs), "output-list");
+  const messages = snapshot.agentMessages?.[selectedNodeId] ?? [];
   ui["inspector-content"].append(
     section("Execution", details),
     ...pendingRecoveries.map((recovery, index) =>
@@ -595,13 +593,14 @@ function renderInspector(snapshot) {
     ...(state.status === "awaiting_input" && state.humanRequest
       ? [section("Your input", humanInputPanel(run.runId, state.humanRequest))]
       : []),
-    ...(node.kind === "human" ? [] : [section("Agent message stream", agentMessageStream(messages, snapshot.agentMessages === undefined))]),
-    section(node.kind === "human" ? "Human gate" : "Prompt", prompt),
+    ...(node.kind !== "agent" ? [] : [section("Agent message stream", agentMessageStream(messages, snapshot.agentMessages === undefined))]),
+    ...(node.kind === "scope" ? [section("Scope steps", executionChildren(run, selectedNodeId))] : [section(node.kind === "human" ? "Human gate" : "Prompt", prompt)]),
     section("Input bindings", bindings),
     section("Output variables", outputs),
     ...(node.loop ? [section("Loop gate", keyValueList([
-      ["until", `${node.loop.until.path} ${node.loop.until.operator} ${String(node.loop.until.value ?? "")}`],
-      ["carry as", node.loop.carry_as],
+      ["until", predicateLabel(node.loop.until)],
+      ["outcome", state.loopOutcome ?? "unknown"],
+      ...(node.kind === "scope" ? [["agent sessions", node.loop.agent_sessions ?? "fresh"], ["initial state", JSON.stringify(node.loop.initial)], ["next state", JSON.stringify(node.loop.next)]] : [["carry as", node.loop.carry_as]]),
       ["exhaustion", node.loop.on_exhaustion],
     ], "binding-list"))] : []),
     ...(node.for_each ? [section("Queue", keyValueList([
@@ -664,8 +663,9 @@ function render(snapshot) {
     renderGraph(null, null);
     return;
   }
-  if (!selectedNodeId || !definition.nodes.some((node) => node.id === selectedNodeId)) {
-    selectedNodeId = definition.nodes.find((node) => ["awaiting_input", "awaiting_recovery", "running"].includes(run.nodes[node.id]?.status))?.id ?? selectedNodeId;
+  if (!selectedNodeId || !run.nodes[selectedNodeId]) {
+    selectedNodeId = Object.values(run.nodes).find((node) => ["awaiting_input", "awaiting_recovery"].includes(node.status))?.id
+      ?? Object.values(run.nodes).find((node) => node.status === "running")?.id ?? null;
   }
   text(ui["summary-completed"], `${run.completedCount} / ${run.totalCount}`);
   text(ui["summary-wave"], run.currentWave || "—");

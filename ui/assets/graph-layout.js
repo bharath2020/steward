@@ -91,7 +91,43 @@
     return { width, height, layers, boxes };
   }
 
-  const api = { wrapText, fitText, layoutGraph };
+  // Resolve an execution instance to its immutable authored definition. IDs are
+  // assigned by the interpreter; presentation never expands or schedules work.
+  function definitionNode(definition, instanceId) {
+    let nodes = definition?.nodes ?? [];
+    let node;
+    for (const part of String(instanceId ?? "").split(".")) {
+      node = nodes.find((item) => item.id === part.replace(/~\d+$/, ""));
+      if (!node) return undefined;
+      nodes = node.nodes ?? [];
+    }
+    return node;
+  }
+
+  function scopeInstances(run, parentId) {
+    return Object.values(run?.nodes ?? {}).filter((node) => node.parentId === parentId);
+  }
+
+  function predicateLabel(predicate) {
+    if (predicate.all) return `ALL (${predicate.all.map(predicateLabel).join("; ")})`;
+    if (predicate.any) return `ANY (${predicate.any.map(predicateLabel).join("; ")})`;
+    if (predicate.not) return `NOT (${predicateLabel(predicate.not)})`;
+    const operator = ({ equals: "=", not_equals: "≠", greater_than: ">", greater_than_or_equal: "≥", less_than: "<", less_than_or_equal: "≤" })[predicate.operator] ?? predicate.operator;
+    return `${predicate.path} ${operator}${predicate.value === undefined ? "" : ` ${JSON.stringify(predicate.value)}`}`;
+  }
+
+  function loopLabel(node, state) {
+    const current = state.iterationCount ?? state.iteration ?? 0;
+    const maximum = node.loop.max_iterations;
+    const outcome = ({ condition_met: "CONDITION MET", exhausted_accepted: "LIMIT ACCEPTED", exhausted_failed: "LIMIT FAILED" })[state.loopOutcome];
+    if (outcome) return `${current} / ${maximum} · ${outcome}`;
+    if (state.status === "completed" || state.status === "failed") return `${current} / ${maximum} · OUTCOME UNKNOWN`;
+    if (state.status === "awaiting_recovery") return `PAUSED ${current} / ${maximum} · RECOVERY`;
+    if (state.status === "pending") return `UP TO ${maximum} ITERATIONS · ${predicateLabel(node.loop.until)}`;
+    return `ITERATION ${current} / ${maximum} · ${predicateLabel(node.loop.until)}`;
+  }
+
+  const api = { wrapText, fitText, layoutGraph, definitionNode, scopeInstances, predicateLabel, loopLabel };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.WorkflowGraphLayout = api;
 })(typeof window === "undefined" ? globalThis : window);

@@ -1,0 +1,73 @@
+version: 1
+name: Review with parallel checks
+defaults:
+  provider: simulated
+  max_parallelism: 2
+nodes:
+  resolve:
+    kind: scope
+    inputs:
+      task: $input.task
+    loop:
+      max_iterations: 3
+      on_exhaustion: fail
+      initial:
+        results: null
+      next:
+        results: $output
+      until:
+        all:
+          - path: implementation.success
+            operator: equals
+            value: true
+          - path: validation.success
+            operator: equals
+            value: true
+    nodes:
+      review:
+        prompt: Review the task and previous results. Give both agents guidance for this iteration.
+        inputs:
+          task: $input.task
+          previous_results: $state.results
+        outputs:
+          guidance: string
+        demo_output:
+          guidance: Check the proposed approach and report success explicitly.
+      parallel_work:
+        kind: scope
+        depends_on: [review]
+        inputs:
+          guidance: $nodes.review.output.guidance
+        nodes:
+          implementation:
+            prompt: Assess the implementation approach using the review guidance. Report whether it meets the requirements.
+            inputs:
+              guidance: $input.guidance
+            outputs:
+              success: boolean
+            demo_output:
+              success: true
+          validation:
+            prompt: Independently validate the approach using the review guidance. Report whether it meets the requirements.
+            inputs:
+              guidance: $input.guidance
+            outputs:
+              success: boolean
+            demo_outputs:
+              - success: false
+              - success: true
+        outputs:
+          implementation: $nodes.implementation.output
+          validation: $nodes.validation.output
+    outputs:
+      implementation: $nodes.parallel_work.output.implementation
+      validation: $nodes.parallel_work.output.validation
+  next_agent:
+    depends_on: [resolve]
+    prompt: Summarize the accepted results from both agents.
+    inputs:
+      results: $nodes.resolve.output
+    outputs:
+      summary: string
+    demo_output:
+      summary: Both parallel agents succeeded in the same iteration.

@@ -1,0 +1,37 @@
+TAP version 13
+# Subtest: flat V1 inputs retain literal dollar strings
+not ok 1 - flat V1 inputs retain literal dollar strings
+  ---
+  duration_ms: 17.130542
+  type: 'test'
+  location: '/Users/bharath2020/Documents/projects/steward/tests/scope-compatibility.test.ts:2:984'
+  failureType: 'testCodeFailure'
+  error: 'Invalid workflow: reference $state.value is unavailable in this context'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    fail (/Users/bharath2020/Documents/projects/steward/src/definition.ts:33:9)
+    references (/Users/bharath2020/Documents/projects/steward/src/definition.ts:320:51)
+    <anonymous> (/Users/bharath2020/Documents/projects/steward/src/definition.ts:305:84)
+    Array.forEach (<anonymous>)
+    references (/Users/bharath2020/Documents/projects/steward/src/definition.ts:305:68)
+    validateScopes (/Users/bharath2020/Documents/projects/steward/src/definition.ts:326:5)
+    compileWorkflow (/Users/bharath2020/Documents/projects/steward/src/definition.ts:408:3)
+    parseWorkflow (/Users/bharath2020/Documents/projects/steward/src/definition.ts:366:10)
+    TestContext.<anonymous> (/Users/bharath2020/Documents/projects/steward/tests/scope-compatibility.test.ts:7:22)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+  ...
+# Subtest: old persisted dollar-state inputs remain literals without scope context
+ok 2 - old persisted dollar-state inputs remain literals without scope context
+  ---
+  duration_ms: 1.608792
+  type: 'test'
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 1
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 195.443958

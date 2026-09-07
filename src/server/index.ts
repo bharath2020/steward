@@ -50,7 +50,7 @@ async function snapshot(runId?: string): Promise<Record<string, unknown>> {
     readEvents(selected.runId),
   ]);
   const agentMessages = Object.fromEntries(await Promise.all(
-    definition.nodes.map(async (node) => [node.id, await readAgentMessages(selected.runId, node.id)] as const),
+    Object.keys(selected.nodes).map(async (nodeId) => [nodeId, await readAgentMessages(selected.runId, nodeId)] as const),
   ));
   return {
     runs: runs.map((run) => ({

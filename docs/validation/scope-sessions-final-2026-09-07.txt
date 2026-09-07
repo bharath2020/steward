@@ -1,0 +1,1354 @@
+
+> steward@0.1.0 verify:all
+> npm run verify && npm run test:e2e && npm run verify:recovery
+
+
+> steward@0.1.0 verify
+> npm run verify:installer && npm run build && npm test
+
+
+> steward@0.1.0 verify:installer
+> node scripts/verify-installer.mjs && node --import tsx --test tests/install.test.ts
+
+Installer publication contract passed: README and default follow main.
+TAP version 13
+# Subtest: archive installer needs no Git, forwards options, and preserves an existing installation
+ok 1 - archive installer needs no Git, forwards options, and preserves an existing installation
+  ---
+  duration_ms: 1207.119417
+  type: 'test'
+  ...
+# Subtest: archive installer refuses an unrelated destination
+ok 2 - archive installer refuses an unrelated destination
+  ---
+  duration_ms: 11.906416
+  type: 'test'
+  ...
+# Subtest: failed downloads leave no install directory or stale download lock
+ok 3 - failed downloads leave no install directory or stale download lock
+  ---
+  duration_ms: 174.858709
+  type: 'test'
+  ...
+# Subtest: public installer downloads main by default and honors an explicit commit
+ok 4 - public installer downloads main by default and honors an explicit commit
+  ---
+  duration_ms: 430.802083
+  type: 'test'
+  ...
+# Subtest: repeat install replaces source, removes obsolete source, and preserves local data
+ok 5 - repeat install replaces source, removes obsolete source, and preserves local data
+  ---
+  duration_ms: 1056.339584
+  type: 'test'
+  ...
+# Subtest: failed repeat download leaves installed source and saved data intact
+ok 6 - failed repeat download leaves installed source and saved data intact
+  ---
+  duration_ms: 215.77325
+  type: 'test'
+  ...
+# Subtest: repeat install supports legacy markers and refuses active setup locks
+ok 7 - repeat install supports legacy markers and refuses active setup locks
+  ---
+  duration_ms: 1021.67825
+  type: 'test'
+  ...
+# Subtest: update stops installed services but leaves another workspace's services alone
+ok 8 - update stops installed services but leaves another workspace's services alone
+  ---
+  duration_ms: 1223.551375
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5437.01475
+
+> steward@0.1.0 build
+> tsc --noEmit
+
+
+> steward@0.1.0 test
+> tsx --test tests/*.test.ts
+
+TAP version 13
+# Subtest: extracts only completed Codex agent messages
+ok 1 - extracts only completed Codex agent messages
+  ---
+  duration_ms: 1.143541
+  type: 'test'
+  ...
+# Subtest: turns structured final output into readable text
+ok 2 - turns structured final output into readable text
+  ---
+  duration_ms: 0.100459
+  type: 'test'
+  ...
+# Subtest: authoring requests are bounded and provider-specific
+ok 3 - authoring requests are bounded and provider-specific
+  ---
+  duration_ms: 1.286291
+  type: 'test'
+  ...
+# Subtest: authoring prompt binds the current draft and existing workflow contract
+ok 4 - authoring prompt binds the current draft and existing workflow contract
+  ---
+  duration_ms: 0.15625
+  type: 'test'
+  ...
+# Subtest: authoring output is accepted only after the existing parser validates it
+ok 5 - authoring output is accepted only after the existing parser validates it
+  ---
+  duration_ms: 25.421209
+  type: 'test'
+  ...
+# Subtest: invalid generated YAML is rejected instead of rendered
+ok 6 - invalid generated YAML is rejected instead of rendered
+  ---
+  duration_ms: 1.353333
+  type: 'test'
+  ...
+# Subtest: a parser diagnostic gets one repair pass before a draft is rendered
+ok 7 - a parser diagnostic gets one repair pass before a draft is rendered
+  ---
+  duration_ms: 2.141375
+  type: 'test'
+  ...
+# Subtest: authoring HTTP accepts the local Console and rejects a foreign browser origin
+ok 8 - authoring HTTP accepts the local Console and rejects a foreign browser origin
+  ---
+  duration_ms: 37.291083
+  type: 'test'
+  ...
+# Subtest: CLI modules can be imported without issuing commands or starting local services
+ok 9 - CLI modules can be imported without issuing commands or starting local services
+  ---
+  duration_ms: 439.026375
+  type: 'test'
+  ...
+# Subtest: parses the demo DAG and preserves fan-out/fan-in dependencies
+ok 10 - parses the demo DAG and preserves fan-out/fan-in dependencies
+  ---
+  duration_ms: 104.860542
+  type: 'test'
+  ...
+# Subtest: rejects cycles before a durable run starts
+ok 11 - rejects cycles before a durable run starts
+  ---
+  duration_ms: 1.252375
+  type: 'test'
+  ...
+# Subtest: resolves initial and fan-in output variables
+ok 12 - resolves initial and fan-in output variables
+  ---
+  duration_ms: 10.474875
+  type: 'test'
+  ...
+# Subtest: rejects an unresolved dependency
+ok 13 - rejects an unresolved dependency
+  ---
+  duration_ms: 0.536708
+  type: 'test'
+  ...
+# Subtest: parses a human input node with a generated question binding
+ok 14 - parses a human input node with a generated question binding
+  ---
+  duration_ms: 2.517958
+  type: 'test'
+  ...
+# Subtest: rejects a human input node without a question binding
+ok 15 - rejects a human input node without a question binding
+  ---
+  duration_ms: 0.374958
+  type: 'test'
+  ...
+# Subtest: parses a bounded for_each queue over an array output
+ok 16 - parses a bounded for_each queue over an array output
+  ---
+  duration_ms: 4.399917
+  type: 'test'
+  ...
+# Subtest: rejects unsafe or ambiguous for_each declarations
+ok 17 - rejects unsafe or ambiguous for_each declarations
+  ---
+  duration_ms: 7.180167
+  type: 'test'
+  ...
+# Subtest: rejects malformed deterministic outputs during preflight
+ok 18 - rejects malformed deterministic outputs during preflight
+  ---
+  duration_ms: 18.623334
+  type: 'test'
+  ...
+# Subtest: question fan-out and final join preserve order with separated cards and usable edge anchors
+ok 19 - question fan-out and final join preserve order with separated cards and usable edge anchors
+  ---
+  duration_ms: 1.407709
+  type: 'test'
+  ...
+# Subtest: long titles wrap at words or characters and truncate within their measured width
+ok 20 - long titles wrap at words or characters and truncate within their measured width
+  ---
+  duration_ms: 0.220583
+  type: 'test'
+  ...
+# Subtest: fitted metadata retains short labels and bounds ellipsis including tiny widths
+ok 21 - fitted metadata retains short labels and bounds ellipsis including tiny widths
+  ---
+  duration_ms: 4.098083
+  type: 'test'
+  ...
+# Subtest: mixed title heights leave room for loops and center shorter layers
+ok 22 - mixed title heights leave room for loops and center shorter layers
+  ---
+  duration_ms: 0.258584
+  type: 'test'
+  ...
+# Subtest: dependency depths work with a reverse ordered DAG and exact canvas bounds
+ok 23 - dependency depths work with a reverse ordered DAG and exact canvas bounds
+  ---
+  duration_ms: 0.116917
+  type: 'test'
+  ...
+# Subtest: an empty graph has finite zero bounds and no boxes
+ok 24 - an empty graph has finite zero bounds and no boxes
+  ---
+  duration_ms: 0.053042
+  type: 'test'
+  ...
+# Subtest: renders all four questions generated by the two-agent example as exact choices
+ok 25 - renders all four questions generated by the two-agent example as exact choices
+  ---
+  duration_ms: 66.451583
+  type: 'test'
+  ...
+# Subtest: preserves semicolons and line breaks within option descriptions
+ok 26 - preserves semicolons and line breaks within option descriptions
+  ---
+  duration_ms: 0.110125
+  type: 'test'
+  ...
+# Subtest: keeps ordinary and incomplete questions in the free-text form
+ok 27 - keeps ordinary and incomplete questions in the free-text form
+  ---
+  duration_ms: 0.07025
+  type: 'test'
+  ...
+# Subtest: rejects reordered, duplicate, ambiguous, and empty option labels
+ok 28 - rejects reordered, duplicate, ambiguous, and empty option labels
+  ---
+  duration_ms: 0.109
+  type: 'test'
+  ...
+# Subtest: submits the selected letter without silently using an unselected custom draft
+ok 29 - submits the selected letter without silently using an unselected custom draft
+  ---
+  duration_ms: 0.0885
+  type: 'test'
+  ...
+# Subtest: custom answers retain their content while rejecting whitespace-only submissions
+ok 30 - custom answers retain their content while rejecting whitespace-only submissions
+  ---
+  duration_ms: 0.042584
+  type: 'test'
+  ...
+# Subtest: ordinary questions resolve trimmed text regardless of a stale choice value
+ok 31 - ordinary questions resolve trimmed text regardless of a stale choice value
+  ---
+  duration_ms: 0.081208
+  type: 'test'
+  ...
+# Subtest: archive installer needs no Git, forwards options, and preserves an existing installation
+ok 32 - archive installer needs no Git, forwards options, and preserves an existing installation
+  ---
+  duration_ms: 1169.205958
+  type: 'test'
+  ...
+# Subtest: archive installer refuses an unrelated destination
+ok 33 - archive installer refuses an unrelated destination
+  ---
+  duration_ms: 12.975209
+  type: 'test'
+  ...
+# Subtest: failed downloads leave no install directory or stale download lock
+ok 34 - failed downloads leave no install directory or stale download lock
+  ---
+  duration_ms: 165.297584
+  type: 'test'
+  ...
+# Subtest: public installer downloads main by default and honors an explicit commit
+ok 35 - public installer downloads main by default and honors an explicit commit
+  ---
+  duration_ms: 406.172708
+  type: 'test'
+  ...
+# Subtest: repeat install replaces source, removes obsolete source, and preserves local data
+ok 36 - repeat install replaces source, removes obsolete source, and preserves local data
+  ---
+  duration_ms: 1037.672625
+  type: 'test'
+  ...
+# Subtest: failed repeat download leaves installed source and saved data intact
+ok 37 - failed repeat download leaves installed source and saved data intact
+  ---
+  duration_ms: 308.08075
+  type: 'test'
+  ...
+# Subtest: repeat install supports legacy markers and refuses active setup locks
+ok 38 - repeat install supports legacy markers and refuses active setup locks
+  ---
+  duration_ms: 1118.46925
+  type: 'test'
+  ...
+# Subtest: update stops installed services but leaves another workspace's services alone
+ok 39 - update stops installed services but leaves another workspace's services alone
+  ---
+  duration_ms: 1213.761167
+  type: 'test'
+  ...
+# Subtest: bounded loop continues before its quality gate
+ok 40 - bounded loop continues before its quality gate
+  ---
+  duration_ms: 0.599667
+  type: 'test'
+  ...
+# Subtest: bounded loop exits when its quality gate passes
+ok 41 - bounded loop exits when its quality gate passes
+  ---
+  duration_ms: 0.062334
+  type: 'test'
+  ...
+# Subtest: file prompts resolve relative to YAML and preserve exact Unicode text and input bindings
+ok 42 - file prompts resolve relative to YAML and preserve exact Unicode text and input bindings
+  ---
+  duration_ms: 97.384375
+  type: 'test'
+  ...
+# Subtest: saved definitions survive prompt edits and deletion; new loads bind changed content
+ok 43 - saved definitions survive prompt edits and deletion; new loads bind changed content
+  ---
+  duration_ms: 18.821709
+  type: 'test'
+  ...
+# Subtest: pure parser accepts supplied contents and never silently reads files
+ok 44 - pure parser accepts supplied contents and never silently reads files
+  ---
+  duration_ms: 13.81825
+  type: 'test'
+  ...
+# Subtest: rejects missing, ambiguous and malformed prompt sources in both entrypoints
+ok 45 - rejects missing, ambiguous and malformed prompt sources in both entrypoints
+  ---
+  duration_ms: 62.797917
+  type: 'test'
+  ...
+# Subtest: rejects empty, missing, directory and malformed UTF-8 prompt files with node context
+ok 46 - rejects empty, missing, directory and malformed UTF-8 prompt files with node context
+  ---
+  duration_ms: 34.600333
+  type: 'test'
+  ...
+# Subtest: supports mixed inline, shared file, and human nodes without changing their contracts
+ok 47 - supports mixed inline, shared file, and human nodes without changing their contracts
+  ---
+  duration_ms: 9.719459
+  type: 'test'
+  ...
+# Subtest: file definition identity excludes the containing directory and retains declared paths
+ok 48 - file definition identity excludes the containing directory and retains declared paths
+  ---
+  duration_ms: 11.476208
+  type: 'test'
+  ...
+# Subtest: explicit absolute prompt paths are supported
+ok 49 - explicit absolute prompt paths are supported
+  ---
+  duration_ms: 5.705792
+  type: 'test'
+  ...
+# Subtest: inline-only definition hash remains stable
+ok 50 - inline-only definition hash remains stable
+  ---
+  duration_ms: 8.975041
+  type: 'test'
+  ...
+# Subtest: loads the runnable file prompt example
+ok 51 - loads the runnable file prompt example
+  ---
+  duration_ms: 2.767292
+  type: 'test'
+  ...
+# Subtest: queue batches independently honor global, group, and node-local concurrency caps
+ok 52 - queue batches independently honor global, group, and node-local concurrency caps
+  ---
+  duration_ms: 1.160833
+  type: 'test'
+  ...
+# Subtest: prototype-named nodes and groups remain schedulable
+ok 53 - prototype-named nodes and groups remain schedulable
+  ---
+  duration_ms: 0.099166
+  type: 'test'
+  ...
+# Subtest: node-local concurrency remains stricter than global and group limits
+ok 54 - node-local concurrency remains stricter than global and group limits
+  ---
+  duration_ms: 0.106583
+  type: 'test'
+  ...
+# Subtest: an empty queue produces no activity batches
+ok 55 - an empty queue produces no activity batches
+  ---
+  duration_ms: 0.039209
+  type: 'test'
+  ...
+# Subtest: a rolling queue fills a freed slot without exceeding active limits
+ok 56 - a rolling queue fills a freed slot without exceeding active limits
+  ---
+  duration_ms: 0.113667
+  type: 'test'
+  ...
+# Subtest: Codex retries resume the exact provider session
+ok 57 - Codex retries resume the exact provider session
+  ---
+  duration_ms: 1.227375
+  type: 'test'
+  ...
+# Subtest: heartbeat session checkpoints are bound to one Temporal activity identity
+ok 58 - heartbeat session checkpoints are bound to one Temporal activity identity
+  ---
+  duration_ms: 0.145875
+  type: 'test'
+  ...
+# Subtest: network failures remain retryable and context exhaustion cannot be resumed
+ok 59 - network failures remain retryable and context exhaustion cannot be resumed
+  ---
+  duration_ms: 2.111125
+  type: 'test'
+  ...
+# Subtest: completion receipts reject altered identity, output, and dispatch tokens
+ok 60 - completion receipts reject altered identity, output, and dispatch tokens
+  ---
+  duration_ms: 8.601458
+  type: 'test'
+  ...
+# Subtest: queued items receive distinct durable artifact and receipt paths
+ok 61 - queued items receive distinct durable artifact and receipt paths
+  ---
+  duration_ms: 0.340583
+  type: 'test'
+  ...
+# 2026-09-07T22:39:10.586Z [INFO] asset workflow-bundle-5e4944a6b2c38f4aa216.js 1.72 MiB [emitted] [immutable] (name: main)
+# runtime modules 883 bytes 4 modules
+# modules by path ./node_modules/@temporalio/ 387 KiB
+#   modules by path ./node_modules/@temporalio/common/lib/ 164 KiB 36 modules
+#   modules by path ./node_modules/@temporalio/workflow/ 223 KiB 29 modules
+# modules by path ./node_modules/nexus-rpc/lib/ 22.3 KiB 13 modules
+# modules by path ./src/ 53.2 KiB
+#   ./src/workflows-autogenerated-entrypoint.cjs 505 bytes [built] [code generated]
+#   ./src/workflows.ts 38 KiB [built] [code generated]
+#   ./src/resolver.ts 2.76 KiB [built] [code generated]
+#   + 3 modules
+# optional modules 30 bytes [optional]
+#   __temporal_custom_payload_converter (ignored) 15 bytes [optional] [built] [code generated]
+#   __temporal_custom_failure_converter (ignored) 15 bytes [optional] [built] [code generated]
+# ./node_modules/long/umd/index.js 49.8 KiB [built] [code generated]
+# ./node_modules/ms/dist/index.cjs 3.41 KiB [built] [code generated]
+# webpack 5.110.3 compiled successfully in 283 ms { sdkComponent: 'worker', taskQueue: 'fake_replay_queue-0' }
+# 2026-09-07T22:39:10.590Z [INFO] Workflow bundle created {
+#   sdkComponent: 'worker',
+#   taskQueue: 'fake_replay_queue-0',
+#   size: '1.72MB'
+# }
+# 2026-09-07T22:39:10.616Z [INFO] Worker state changed {
+#   sdkComponent: 'worker',
+#   taskQueue: 'fake_replay_queue-0',
+#   state: 'RUNNING'
+# }
+# 2026-09-07T22:39:10.645Z [INFO] Worker state changed {
+#   sdkComponent: 'worker',
+#   taskQueue: 'fake_replay_queue-0',
+#   state: 'STOPPING'
+# }
+# 2026-09-07T22:39:10.646Z [INFO] Worker state changed {
+#   sdkComponent: 'worker',
+#   taskQueue: 'fake_replay_queue-0',
+#   state: 'DRAINING'
+# }
+# 2026-09-07T22:39:10.646Z [INFO] Worker state changed {
+#   sdkComponent: 'worker',
+#   taskQueue: 'fake_replay_queue-0',
+#   state: 'DRAINED'
+# }
+# 2026-09-07T22:39:10.646Z [INFO] Worker state changed {
+#   sdkComponent: 'worker',
+#   taskQueue: 'fake_replay_queue-0',
+#   state: 'STOPPED'
+# }
+# Subtest: current interpreter replays supported pre-scope-predicate-history.json
+ok 62 - current interpreter replays supported pre-scope-predicate-history.json
+  ---
+  duration_ms: 533.9375
+  type: 'test'
+  ...
+# 2026-09-07T22:39:10.818Z [INFO] asset workflow-bundle-5e4944a6b2c38f4aa216.js 1.72 MiB [emitted] [immutable] (name: main)
+# runtime modules 883 bytes 4 modules
+# modules by path ./node_modules/@temporalio/ 387 KiB
+#   modules by path ./node_modules/@temporalio/common/lib/ 164 KiB 36 modules
+#   modules by path ./node_modules/@temporalio/workflow/ 223 KiB 29 modules
+# modules by path ./node_modules/nexus-rpc/lib/ 22.3 KiB 13 modules
+# modules by path ./src/ 53.2 KiB
+#   ./src/workflows-autogenerated-entrypoint.cjs 505 bytes [built] [code generated]
+#   ./src/workflows.ts 38 KiB [built] [code generated]
+#   ./src/resolver.ts 2.76 KiB [built] [code generated]
+#   + 3 modules
+# optional modules 30 bytes [optional]
+#   __temporal_custom_payload_converter (ignored) 15 bytes [optional] [built] [code generated]
+#   __temporal_custom_failure_converter (ignored) 15 bytes [optional] [built] [code generated]
+# ./node_modules/long/umd/index.js 49.8 KiB [built] [code generated]
+# ./node_modules/ms/dist/index.cjs 3.41 KiB [built] [code generated]
+# webpack 5.110.3 compiled successfully in 157 ms { sdkComponent: 'worker', taskQueue: 'fake_replay_queue-1' }
+# 2026-09-07T22:39:10.820Z [INFO] Workflow bundle created {
+#   sdkComponent: 'worker',
+#   taskQueue: 'fake_replay_queue-1',
+#   size: '1.72MB'
+# }
+# 2026-09-07T22:39:10.830Z [INFO] Worker state changed {
+#   sdkComponent: 'worker',
+#   taskQueue: 'fake_replay_queue-1',
+#   state: 'RUNNING'
+# }
+# 2026-09-07T22:39:10.842Z [INFO] Worker state changed {
+#   sdkComponent: 'worker',
+#   taskQueue: 'fake_replay_queue-1',
+#   state: 'STOPPING'
+# }
+# 2026-09-07T22:39:10.842Z [INFO] Worker state changed {
+#   sdkComponent: 'worker',
+#   taskQueue: 'fake_replay_queue-1',
+#   state: 'DRAINING'
+# }
+# 2026-09-07T22:39:10.842Z [INFO] Worker state changed {
+#   sdkComponent: 'worker',
+#   taskQueue: 'fake_replay_queue-1',
+#   state: 'DRAINED'
+# }
+# 2026-09-07T22:39:10.842Z [INFO] Worker state changed {
+#   sdkComponent: 'worker',
+#   taskQueue: 'fake_replay_queue-1',
+#   state: 'STOPPED'
+# }
+# Subtest: current interpreter replays supported pre-outcome-loop-history.json
+ok 63 - current interpreter replays supported pre-outcome-loop-history.json
+  ---
+  duration_ms: 195.528583
+  type: 'test'
+  ...
+# Subtest: scope artifact acceptance verifies declared exports and committed child evidence
+    # Subtest: identical recommit preserves bytes and binds schema and child receipt hash
+    ok 1 - identical recommit preserves bytes and binds schema and child receipt hash
+      ---
+      duration_ms: 127.338542
+      type: 'test'
+      ...
+    # Subtest: rejects output that violates inferred schema before publication
+    ok 2 - rejects output that violates inferred schema before publication
+      ---
+      duration_ms: 16.206667
+      type: 'test'
+      ...
+    # Subtest: rejects schema-valid output that disagrees with export binding
+    ok 3 - rejects schema-valid output that disagrees with export binding
+      ---
+      duration_ms: 11.6665
+      type: 'test'
+      ...
+    # Subtest: rejects incomplete child set
+    ok 4 - rejects incomplete child set
+      ---
+      duration_ms: 9.854125
+      type: 'test'
+      ...
+    # Subtest: rejects absent accepted child receipts despite completed projection
+    ok 5 - rejects absent accepted child receipts despite completed projection
+      ---
+      duration_ms: 13.783917
+      type: 'test'
+      ...
+    # Subtest: rejects corrupted child output
+    ok 6 - rejects corrupted child output
+      ---
+      duration_ms: 8.319792
+      type: 'test'
+      ...
+    # Subtest: rejects corrupted child receipt
+    ok 7 - rejects corrupted child receipt
+      ---
+      duration_ms: 7.236708
+      type: 'test'
+      ...
+    # Subtest: scope binds the terminal loop receipt when iterations return identical values
+    ok 8 - scope binds the terminal loop receipt when iterations return identical values
+      ---
+      duration_ms: 12.737625
+      type: 'test'
+      ...
+    # Subtest: corrupt superseded receipt does not replace or invalidate valid terminal evidence
+    ok 9 - corrupt superseded receipt does not replace or invalidate valid terminal evidence
+      ---
+      duration_ms: 13.291959
+      type: 'test'
+      ...
+    # Subtest: earlier equal output cannot replace a missing terminal loop receipt
+    ok 10 - earlier equal output cannot replace a missing terminal loop receipt
+      ---
+      duration_ms: 13.294875
+      type: 'test'
+      ...
+    # Subtest: parent refuses nested scope evidence whose child provenance was corrupted
+    ok 11 - parent refuses nested scope evidence whose child provenance was corrupted
+      ---
+      duration_ms: 8.363666
+      type: 'test'
+      ...
+    # Subtest: refuses to replace corrupted committed scope evidence
+    ok 12 - refuses to replace corrupted committed scope evidence
+      ---
+      duration_ms: 7.704541
+      type: 'test'
+      ...
+    1..12
+ok 64 - scope artifact acceptance verifies declared exports and committed child evidence
+  ---
+  duration_ms: 286.493458
+  type: 'test'
+  ...
+# Subtest: flat V1 inputs retain literal dollar strings
+ok 65 - flat V1 inputs retain literal dollar strings
+  ---
+  duration_ms: 23.1825
+  type: 'test'
+  ...
+# Subtest: old persisted dollar-state inputs remain literals without scope context
+ok 66 - old persisted dollar-state inputs remain literals without scope context
+  ---
+  duration_ms: 9.784875
+  type: 'test'
+  ...
+# Subtest: scope inspection resolves nested instance definitions and preserves human request identity
+ok 67 - scope inspection resolves nested instance definitions and preserves human request identity
+  ---
+  duration_ms: 1.214625
+  type: 'test'
+  ...
+# Subtest: loop presentation uses runtime outcomes even when output would suggest a different result
+ok 68 - loop presentation uses runtime outcomes even when output would suggest a different result
+  ---
+  duration_ms: 0.191667
+  type: 'test'
+  ...
+# Subtest: portable scope example loads and authoring contract describes composable repeat
+ok 69 - portable scope example loads and authoring contract describes composable repeat
+  ---
+  duration_ms: 44.854875
+  type: 'test'
+  ...
+# Subtest: session continuation example opts in while default example preserves fresh behavior
+ok 70 - session continuation example opts in while default example preserves fresh behavior
+  ---
+  duration_ms: 15.447208
+  type: 'test'
+  ...
+# Subtest: opt-in session identity is checked at the Activity boundary
+    # Subtest: reject mismatched workspace identity without invoking provider or rebinding heartbeat
+    ok 1 - reject mismatched workspace identity without invoking provider or rebinding heartbeat
+      ---
+      duration_ms: 33.757541
+      type: 'test'
+      ...
+    # Subtest: reject mismatched provider identity without invoking provider or rebinding heartbeat
+    ok 2 - reject mismatched provider identity without invoking provider or rebinding heartbeat
+      ---
+      duration_ms: 13.897875
+      type: 'test'
+      ...
+    # Subtest: reject mismatched session identity without invoking provider or rebinding heartbeat
+    ok 3 - reject mismatched session identity without invoking provider or rebinding heartbeat
+      ---
+      duration_ms: 8.179458
+      type: 'test'
+      ...
+    # Subtest: latest matching dispatch checkpoint takes precedence over prior iteration seed
+    ok 4 - latest matching dispatch checkpoint takes precedence over prior iteration seed
+      ---
+      duration_ms: 294.401959
+      type: 'test'
+      ...
+    # Subtest: accepted receipt recovery restores the bound session without another provider call
+    ok 5 - accepted receipt recovery restores the bound session without another provider call
+      ---
+      duration_ms: 60.068625
+      type: 'test'
+      ...
+    1..5
+ok 71 - opt-in session identity is checked at the Activity boundary
+  ---
+  duration_ms: 457.984083
+  type: 'test'
+  ...
+# Subtest: all shipped examples have valid definitions, demo outputs, prompt files, and input bindings
+ok 72 - all shipped examples have valid definitions, demo outputs, prompt files, and input bindings
+  ---
+  duration_ms: 43.154292
+  type: 'test'
+  ...
+# Subtest: setup defaults to reconnecting and requires an explicit new-run flag
+ok 73 - setup defaults to reconnecting and requires an explicit new-run flag
+  ---
+  duration_ms: 0.716541
+  type: 'test'
+  ...
+# Subtest: bundled authoring examples load and validate their initial inputs offline
+ok 74 - bundled authoring examples load and validate their initial inputs offline
+  ---
+  duration_ms: 487.619833
+  type: 'test'
+  ...
+# Subtest: offline validation fails for missing inputs and invalid workflow paths
+ok 75 - offline validation fails for missing inputs and invalid workflow paths
+  ---
+  duration_ms: 284.643834
+  type: 'test'
+  ...
+# Subtest: portable installation includes references and examples and refuses an existing skill
+ok 76 - portable installation includes references and examples and refuses an existing skill
+  ---
+  duration_ms: 110.367166
+  type: 'test'
+  ...
+# Subtest: standard setup installs the skill and repeat setup preserves a customized copy
+ok 77 - standard setup installs the skill and repeat setup preserves a customized copy
+  ---
+  duration_ms: 1355.693458
+  type: 'test'
+  ...
+# Subtest: rebuilds operator state from the append-only event timeline
+ok 78 - rebuilds operator state from the append-only event timeline
+  ---
+  duration_ms: 0.925292
+  type: 'test'
+  ...
+# Subtest: projects queued item progress and commits only the ordered aggregate
+ok 79 - projects queued item progress and commits only the ordered aggregate
+  ---
+  duration_ms: 0.861834
+  type: 'test'
+  ...
+# Subtest: projects durable operator recovery from the event timeline
+ok 80 - projects durable operator recovery from the event timeline
+  ---
+  duration_ms: 0.131709
+  type: 'test'
+  ...
+# Subtest: keeps concurrent queue recoveries independently actionable and retry-idempotent
+ok 81 - keeps concurrent queue recoveries independently actionable and retry-idempotent
+  ---
+  duration_ms: 0.205
+  type: 'test'
+  ...
+# Subtest: projects a durable human question and accepted answer
+ok 82 - projects a durable human question and accepted answer
+  ---
+  duration_ms: 0.10175
+  type: 'test'
+  ...
+# Subtest: dashboard composition preserves each application mount point exactly once
+ok 83 - dashboard composition preserves each application mount point exactly once
+  ---
+  duration_ms: 6.067042
+  type: 'test'
+  ...
+# Subtest: workflow export filenames are portable and retain the YAML extension
+ok 84 - workflow export filenames are portable and retain the YAML extension
+  ---
+  duration_ms: 0.163958
+  type: 'test'
+  ...
+# Subtest: UI asset lookup serves only the explicit public asset allowlist
+ok 85 - UI asset lookup serves only the explicit public asset allowlist
+  ---
+  duration_ms: 4.902583
+  type: 'test'
+  ...
+# Subtest: appearance preferences retain supported choices and fall back independently
+ok 86 - appearance preferences retain supported choices and fall back independently
+  ---
+  duration_ms: 0.311917
+  type: 'test'
+  ...
+# Subtest: explicit themes ignore the operating system and system theme follows it
+ok 87 - explicit themes ignore the operating system and system theme follows it
+  ---
+  duration_ms: 0.078292
+  type: 'test'
+  ...
+# Subtest: run shortcut requires a fresh unmodified lowercase r and an enabled action
+ok 88 - run shortcut requires a fresh unmodified lowercase r and an enabled action
+  ---
+  duration_ms: 0.137167
+  type: 'test'
+  ...
+# Subtest: run shortcut preserves typing in form controls and editable descendants
+ok 89 - run shortcut preserves typing in form controls and editable descendants
+  ---
+  duration_ms: 0.13375
+  type: 'test'
+  ...
+1..89
+# tests 106
+# suites 0
+# pass 106
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5572.399459
+
+> steward@0.1.0 test:e2e
+> node --import tsx --test --test-concurrency=1 tests/e2e/*.test.ts
+
+TAP version 13
+# E2E evidence: /var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-kC4xtl
+# Subtest: consumer CLI end to end
+    # Subtest: every shipped YAML has an explicit scenario
+    ok 1 - every shipped YAML has an explicit scenario
+      ---
+      duration_ms: 1.985042
+      type: 'test'
+      ...
+    # Subtest: bundled file-prompt.yaml
+    ok 2 - bundled file-prompt.yaml
+      ---
+      duration_ms: 1144.746375
+      type: 'test'
+      ...
+    # Subtest: bundled product-launch.yaml
+    ok 3 - bundled product-launch.yaml
+      ---
+      duration_ms: 1551.604416
+      type: 'test'
+      ...
+    # Subtest: bundled privacy-launch-with-questions.yaml
+    ok 4 - bundled privacy-launch-with-questions.yaml
+      ---
+      duration_ms: 3027.515208
+      type: 'test'
+      ...
+    # Subtest: bundled two-agent-multiple-choice.yaml
+    ok 5 - bundled two-agent-multiple-choice.yaml
+      ---
+      duration_ms: 2370.465292
+      type: 'test'
+      ...
+    # Subtest: bundled queued-fan-out.yaml
+    ok 6 - bundled queued-fan-out.yaml
+      ---
+      duration_ms: 1203.867916
+      type: 'test'
+      ...
+    # Subtest: all output types survive CLI submission and receipt commit
+    ok 7 - all output types survive CLI submission and receipt commit
+      ---
+      duration_ms: 612.237792
+      type: 'test'
+      ...
+    # Subtest: loop predicate equals
+    ok 8 - loop predicate equals
+      ---
+      duration_ms: 603.122709
+      type: 'test'
+      ...
+    # Subtest: loop predicate not_equals
+    ok 9 - loop predicate not_equals
+      ---
+      duration_ms: 697.670208
+      type: 'test'
+      ...
+    # Subtest: loop predicate greater_than
+    ok 10 - loop predicate greater_than
+      ---
+      duration_ms: 800.115458
+      type: 'test'
+      ...
+    # Subtest: loop predicate greater_than_or_equal
+    ok 11 - loop predicate greater_than_or_equal
+      ---
+      duration_ms: 702.7645
+      type: 'test'
+      ...
+    # Subtest: loop predicate less_than
+    ok 12 - loop predicate less_than
+      ---
+      duration_ms: 607.797958
+      type: 'test'
+      ...
+    # Subtest: loop predicate less_than_or_equal
+    ok 13 - loop predicate less_than_or_equal
+      ---
+      duration_ms: 697.646959
+      type: 'test'
+      ...
+    # Subtest: loop predicate contains
+    ok 14 - loop predicate contains
+      ---
+      duration_ms: 702.3145
+      type: 'test'
+      ...
+    # Subtest: loop predicate truthy
+    ok 15 - loop predicate truthy
+      ---
+      duration_ms: 703.234375
+      type: 'test'
+      ...
+    # Subtest: loop exhaustion fail
+    ok 16 - loop exhaustion fail
+      ---
+      duration_ms: 803.128792
+      type: 'test'
+      ...
+    # Subtest: loop exhaustion accept_last
+    ok 17 - loop exhaustion accept_last
+      ---
+      duration_ms: 1208.772959
+      type: 'test'
+      ...
+    # Subtest: array source empty
+    ok 18 - array source empty
+      ---
+      duration_ms: 587.7415
+      type: 'test'
+      ...
+    # Subtest: array source single
+    ok 19 - array source single
+      ---
+      duration_ms: 698.296417
+      type: 'test'
+      ...
+    # Subtest: array source scalar
+    ok 20 - array source scalar
+      ---
+      duration_ms: 384.747542
+      type: 'test'
+      ...
+    # Subtest: array source missing
+    ok 21 - array source missing
+      ---
+      duration_ms: 487.816166
+      type: 'test'
+      ...
+    # Subtest: reject version before start
+    ok 22 - reject version before start
+      ---
+      duration_ms: 245.615708
+      type: 'test'
+      ...
+    # Subtest: reject empty-nodes before start
+    ok 23 - reject empty-nodes before start
+      ---
+      duration_ms: 234.506708
+      type: 'test'
+      ...
+    # Subtest: reject missing-dependency before start
+    ok 24 - reject missing-dependency before start
+      ---
+      duration_ms: 245.267
+      type: 'test'
+      ...
+    # Subtest: reject self-dependency before start
+    ok 25 - reject self-dependency before start
+      ---
+      duration_ms: 238.522875
+      type: 'test'
+      ...
+    # Subtest: reject cycle before start
+    ok 26 - reject cycle before start
+      ---
+      duration_ms: 244.161625
+      type: 'test'
+      ...
+    # Subtest: reject missing-prompt before start
+    ok 27 - reject missing-prompt before start
+      ---
+      duration_ms: 232.561666
+      type: 'test'
+      ...
+    # Subtest: reject missing-file before start
+    ok 28 - reject missing-file before start
+      ---
+      duration_ms: 234.7375
+      type: 'test'
+      ...
+    # Subtest: reject both-prompts before start
+    ok 29 - reject both-prompts before start
+      ---
+      duration_ms: 236.38
+      type: 'test'
+      ...
+    # Subtest: reject bad-output before start
+    ok 30 - reject bad-output before start
+      ---
+      duration_ms: 242.341541
+      type: 'test'
+      ...
+    # Subtest: reject bad-type before start
+    ok 31 - reject bad-type before start
+      ---
+      duration_ms: 233.641625
+      type: 'test'
+      ...
+    # Subtest: reject unknown-group before start
+    ok 32 - reject unknown-group before start
+      ---
+      duration_ms: 244.571875
+      type: 'test'
+      ...
+    # Subtest: reject provider before start
+    ok 33 - reject provider before start
+      ---
+      duration_ms: 236.409583
+      type: 'test'
+      ...
+    # Subtest: reject human-question before start
+    ok 34 - reject human-question before start
+      ---
+      duration_ms: 236.711167
+      type: 'test'
+      ...
+    # Subtest: reject loop-bound before start
+    ok 35 - reject loop-bound before start
+      ---
+      duration_ms: 236.579917
+      type: 'test'
+      ...
+    # Subtest: reject loop-operator before start
+    ok 36 - reject loop-operator before start
+      ---
+      duration_ms: 239.180417
+      type: 'test'
+      ...
+    # Subtest: reject queue-bound before start
+    ok 37 - reject queue-bound before start
+      ---
+      duration_ms: 234.610042
+      type: 'test'
+      ...
+    # Subtest: reject parallelism before start
+    ok 38 - reject parallelism before start
+      ---
+      duration_ms: 237.780125
+      type: 'test'
+      ...
+    # Subtest: reject retry-budget before start
+    ok 39 - reject retry-budget before start
+      ---
+      duration_ms: 235.225
+      type: 'test'
+      ...
+    # Subtest: reject human-queue before start
+    ok 40 - reject human-queue before start
+      ---
+      duration_ms: 234.886708
+      type: 'test'
+      ...
+    # Subtest: reject human-loop before start
+    ok 41 - reject human-loop before start
+      ---
+      duration_ms: 237.061334
+      type: 'test'
+      ...
+    # Subtest: reject loop-queue before start
+    ok 42 - reject loop-queue before start
+      ---
+      duration_ms: 235.918875
+      type: 'test'
+      ...
+    # Subtest: reject queue-alias before start
+    ok 43 - reject queue-alias before start
+      ---
+      duration_ms: 238.651125
+      type: 'test'
+      ...
+    # Subtest: reject queue-reference before start
+    ok 44 - reject queue-reference before start
+      ---
+      duration_ms: 242.594833
+      type: 'test'
+      ...
+    # Subtest: reject negative-delay before start
+    ok 45 - reject negative-delay before start
+      ---
+      duration_ms: 233.286458
+      type: 'test'
+      ...
+    # Subtest: CLI usage, missing files and malformed documents
+    ok 46 - CLI usage, missing files and malformed documents
+      ---
+      duration_ms: 1806.669
+      type: 'test'
+      ...
+    1..46
+ok 1 - consumer CLI end to end
+  ---
+  duration_ms: 29329.927625
+  type: 'test'
+  ...
+# E2E evidence: /var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-HbSH2M
+# Subtest: ordinary loop exposes runtime condition outcome
+ok 2 - ordinary loop exposes runtime condition outcome
+  ---
+  duration_ms: 3350.709917
+  type: 'test'
+  ...
+# E2E evidence: /var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-JN55Je
+# Subtest: scope loop boundaries through real Temporal
+    # Subtest: nested loops complete with one global leaf permit and independent iteration counters
+    ok 1 - nested loops complete with one global leaf permit and independent iteration counters
+      ---
+      duration_ms: 4192.830959
+      type: 'test'
+      ...
+    # Subtest: scope exhaustion fail exposes its outcome and gates dependents
+    ok 2 - scope exhaustion fail exposes its outcome and gates dependents
+      ---
+      duration_ms: 1421.399833
+      type: 'test'
+      ...
+    # Subtest: scope exhaustion accept_last exposes its outcome and gates dependents
+    ok 3 - scope exhaustion accept_last exposes its outcome and gates dependents
+      ---
+      duration_ms: 1926.713708
+      type: 'test'
+      ...
+    # Subtest: invalid nested operand is an error even when another all operand is false
+    ok 4 - invalid nested operand is an error even when another all operand is false
+      ---
+      duration_ms: 813.118375
+      type: 'test'
+      ...
+    # Subtest: reject undeclared-sibling before submitting runtime work
+    ok 5 - reject undeclared-sibling before submitting runtime work
+      ---
+      duration_ms: 269.057583
+      type: 'test'
+      ...
+    # Subtest: reject out-of-scope-reference before submitting runtime work
+    ok 6 - reject out-of-scope-reference before submitting runtime work
+      ---
+      duration_ms: 244.878792
+      type: 'test'
+      ...
+    # Subtest: reject state-without-loop before submitting runtime work
+    ok 7 - reject state-without-loop before submitting runtime work
+      ---
+      duration_ms: 246.041
+      type: 'test'
+      ...
+    # Subtest: reject output-outside-next before submitting runtime work
+    ok 8 - reject output-outside-next before submitting runtime work
+      ---
+      duration_ms: 246.363375
+      type: 'test'
+      ...
+    # Subtest: reject conflicting-dependency-aliases before submitting runtime work
+    ok 9 - reject conflicting-dependency-aliases before submitting runtime work
+      ---
+      duration_ms: 245.376541
+      type: 'test'
+      ...
+    # Subtest: reject predicate-missing-value before submitting runtime work
+    ok 10 - reject predicate-missing-value before submitting runtime work
+      ---
+      duration_ms: 247.116541
+      type: 'test'
+      ...
+    # Subtest: reject expansion-limit before submitting runtime work
+    ok 11 - reject expansion-limit before submitting runtime work
+      ---
+      duration_ms: 245.916042
+      type: 'test'
+      ...
+    # Subtest: reject numeric-predicate-string-value before submitting runtime work
+    ok 12 - reject numeric-predicate-string-value before submitting runtime work
+      ---
+      duration_ms: 249.054292
+      type: 'test'
+      ...
+    1..12
+ok 3 - scope loop boundaries through real Temporal
+  ---
+  duration_ms: 12543.403208
+  type: 'test'
+  ...
+# E2E evidence: /var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-qiPjWp
+# Subtest: scope composition regressions through real Temporal
+    # Subtest: scope exported arrays compose with downstream for_each
+    ok 1 - scope exported arrays compose with downstream for_each
+      ---
+      duration_ms: 1430.970792
+      type: 'test'
+      ...
+    # Subtest: global expansion rejects top-level mapped work in scope workflows before providers start
+    ok 2 - global expansion rejects top-level mapped work in scope workflows before providers start
+      ---
+      duration_ms: 410.31725
+      type: 'test'
+      ...
+    1..2
+ok 4 - scope composition regressions through real Temporal
+  ---
+  duration_ms: 4042.344542
+  type: 'test'
+  ...
+# E2E evidence: /var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-Id2cQ7
+# Subtest: nested human gates survive worker restart with iteration-qualified requests and committed answers
+ok 5 - nested human gates survive worker restart with iteration-qualified requests and committed answers
+  ---
+  duration_ms: 15083.283875
+  type: 'test'
+  ...
+# E2E evidence: /var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-bDuI9H
+# Subtest: scope loops through CLI and real Temporal
+    # Subtest: baseline proves isolated Temporal and receipt harness are healthy
+    ok 1 - baseline proves isolated Temporal and receipt harness are healthy
+      ---
+      duration_ms: 1142.301
+      type: 'test'
+      ...
+    # Subtest: draft and review repeat with explicit carried state before downstream runs once
+    ok 2 - draft and review repeat with explicit carried state before downstream runs once
+      ---
+      duration_ms: 1651.572875
+      type: 'test'
+      ...
+    # Subtest: review fans out to a group and repeats until both succeed in the same iteration
+    ok 3 - review fans out to a group and repeats until both succeed in the same iteration
+      ---
+      duration_ms: 4793.897666
+      type: 'test'
+      ...
+    1..3
+ok 6 - scope loops through CLI and real Temporal
+  ---
+  duration_ms: 9782.905333
+  type: 'test'
+  ...
+# E2E evidence: /var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-rVC5Vd
+# Subtest: scope session policy reaches the external provider through real Temporal
+    # Subtest: omitting the policy starts fresh sessions for every iteration
+    ok 1 - omitting the policy starts fresh sessions for every iteration
+      ---
+      duration_ms: 1753.226042
+      type: 'test'
+      ...
+    # Subtest: resume preserves each parallel leaf session across iterations without sharing siblings
+    ok 2 - resume preserves each parallel leaf session across iterations without sharing siblings
+      ---
+      duration_ms: 1828.553708
+      type: 'test'
+      ...
+    # Subtest: explicit fresh keeps each iteration independent
+    ok 3 - explicit fresh keeps each iteration independent
+      ---
+      duration_ms: 1730.752
+      type: 'test'
+      ...
+    # Subtest: loop-free groups inherit sessions while nested repeats own isolated activation sessions
+    ok 4 - loop-free groups inherit sessions while nested repeats own isolated activation sessions
+      ---
+      duration_ms: 4253.47025
+      type: 'test'
+      ...
+    # Subtest: worker restart at a human gate preserves accepted session affinity without rerunning leaves
+    ok 5 - worker restart at a human gate preserves accepted session affinity without rerunning leaves
+      ---
+      duration_ms: 11912.18575
+      type: 'test'
+      ...
+    # Subtest: failed resume waits for recovery and fresh recovery replaces the next iteration session
+    ok 6 - failed resume waits for recovery and fresh recovery replaces the next iteration session
+      ---
+      duration_ms: 2745.791833
+      type: 'test'
+      ...
+    # Subtest: mapped leaves retain separate position sessions across scope iterations
+    ok 7 - mapped leaves retain separate position sessions across scope iterations
+      ---
+      duration_ms: 2118.208917
+      type: 'test'
+      ...
+    # Subtest: missing provider session IDs explicitly fall back to fresh turns
+    ok 8 - missing provider session IDs explicitly fall back to fresh turns
+      ---
+      duration_ms: 1827.286791
+      type: 'test'
+      ...
+    1..8
+ok 7 - scope session policy reaches the external provider through real Temporal
+  ---
+  duration_ms: 30373.6575
+  type: 'test'
+  ...
+1..7
+# tests 78
+# suites 0
+# pass 78
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 106179.624375
+
+> steward@0.1.0 verify:recovery
+> tsx scripts/recovery-check.ts
+
+{
+  "ok": true,
+  "receiptRecovery": {
+    "runId": "2026-09-07T22-41-02-490Z-385600",
+    "workerKilledAfterProviderCompletion": true,
+    "deletedReceiptRecovered": true,
+    "deletedOutputRecovered": true,
+    "providerReruns": 0,
+    "deletedPromptFileSnapshotRecovered": true,
+    "promptSourceSha256": "a86df9f89aa93b4e07b7f4cdf8487cc2ef1161973391fd808952f92c7c610266"
+  },
+  "networkRecovery": {
+    "runId": "2026-09-07T22-41-16-568Z-eafe68",
+    "automaticAttemptsExhausted": 2,
+    "operatorAction": "retry_same_session",
+    "providerSessionId": "sim-2026-09-07T22-41-16-568Z-eafe68-feasibility",
+    "completedSiblingsRerun": 0
+  },
+  "queueRecovery": {
+    "runId": "2026-09-07T22-41-19-489Z-d6f88d",
+    "pendingRequestsExposed": 2,
+    "waitingItemReleasedPermit": true,
+    "completedItems": 2
+  },
+  "corruptReceiptRecovery": {
+    "runId": "2026-09-07T22-41-21-268Z-13c15f",
+    "corruptDispatchRetained": true,
+    "freshRecoveryCycle": 1,
+    "completed": true
+  },
+  "invalidArraySource": {
+    "runId": "2026-09-07T22-41-34-700Z-390414",
+    "temporalStatus": "FAILED"
+  }
+}

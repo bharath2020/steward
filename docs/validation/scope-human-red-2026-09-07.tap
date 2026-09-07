@@ -1,0 +1,28 @@
+TAP version 13
+# E2E evidence: /var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-Fyelxf
+# Subtest: nested human gates survive worker restart with iteration-qualified requests and committed answers
+not ok 1 - nested human gates survive worker restart with iteration-qualified requests and committed answers
+  ---
+  duration_ms: 15071.164417
+  type: 'test'
+  location: '/Users/bharath2020/Documents/projects/steward/tests/e2e/scope-human.test.ts:2:1163'
+  failureType: 'testCodeFailure'
+  error: "ENOENT: no such file or directory, open '/var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-Fyelxf/runs/2026-09-07T22-01-29-164Z-e67d4f/nodes/repeat~1.group~1.gate/human-output.json'"
+  code: 'ENOENT'
+  stack: |-
+    async open (node:internal/fs/promises:639:25)
+    async readFile (node:internal/fs/promises:1252:14)
+    async Harness.json (/Users/bharath2020/Documents/projects/steward/tests/e2e/harness.ts:81:23)
+    async TestContext.<anonymous> (/Users/bharath2020/Documents/projects/steward/tests/e2e/scope-human.test.ts:56:22)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 15334.604875

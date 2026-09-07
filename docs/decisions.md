@@ -24,6 +24,8 @@ This register records choices made for the production direction. It does not ass
 | ADR-016 | Pre-adoption runtime has one current interpreter and no compatibility shims | Current runtime |
 | ADR-017 | Repeat archive installation updates source and restarts owned services | Current installer correction |
 | ADR-018 | Portable V1 authoring skill and offline loader validation | Current authoring distribution |
+| ADR-019 | Composable executable scopes and bounded repeat | Early P4 language slice |
+| ADR-020 | Explicit provider session continuity within repeated scopes | Scope execution option |
 
 ## ADR-018 — Portable V1 authoring skill
 
@@ -267,3 +269,35 @@ and committed evidence remain with their existing owners.
 markers, failed downloads, saved data, and real process shutdown scoped to a
 workspace. The isolated macOS CI also repeats installation at the candidate SHA
 and rechecks Temporal completion and output receipts after restart.
+
+
+## ADR-019 — Composable executable scopes and bounded repeat
+
+**Context.** The maintainer approved grouping several nodes into a repeated graph, including review → a nested parallel group → repeat until both agents succeed in the same iteration → next agent. Single-agent loops and named concurrency groups cannot express that behavior. The requested delivery starts with failing real-Temporal end-to-end tests, followed by implementation.
+
+**Decision.** Extend authored `version: 1` with `kind: scope`: local `inputs`, a nested acyclic `nodes` graph, and `outputs` export bindings. A scope is externally one dependency-producing node. Removing its `loop` runs the same graph once. Existing `groups` keep their concurrency meaning. `depends_on` aliases `needs`; declaring both is rejected.
+
+Scope repeat executes at least once, requires an explicit iteration bound (1–20), commits all children and exported output, then evaluates `until`. `initial` establishes state from scope inputs; `next` replaces that state from `$input`, `$state`, and the current exported `$output`, preserving declared state keys. Children resolve `$nodes` only within their scope and `$input` from explicit scope inputs. A non-loop scope inherits enclosing state; an inner loop owns independent state. A composite predicate uses nonempty `all`/`any` lists or `not`; invalid operands fail explicitly. False repeats the entire graph. Exhaustion fails unless the author explicitly selects `accept_last`.
+
+Qualified execution IDs encode the entire enclosing iteration path (`resolve~2.parallel_work~1.validation`). Each iteration keeps its own committed evidence and human/recovery identities. Scope execution holds no provider permit; leaf work shares existing concurrency admission. Nesting is bounded to eight levels and dynamic scope expansion to 1000 step instances. Simulation fixtures for a leaf without its own loop follow the nearest enclosing repeat iteration, without changing receipt identity or provider-attempt semantics.
+
+The compiler owns scope/reference validation and export schemas, the Temporal interpreter owns readiness and predicates, and Activities own export artifact commits. Console formats interpreter outcomes (`condition_met`, `exhausted_accepted`, `exhausted_failed`); absent outcomes are unknown. Top-level graphs show scopes as composable nodes; their inspectors expose nested execution instances and the same human/recovery controls. Authoring remains parser-gated preview under ADR-013.
+
+**Compatibility and sequencing.** This refines ADR-002/003/009/018 and supersedes the P4-only deferral of executable nested scopes. The maintainer explicitly authorized this bounded P4 slice now; it does not qualify the remaining P1–P4 gates. Keep the single interpreter required by ADR-016, preserve current supported histories with replay-safe changes, and preserve existing V1 definitions and runtime data. Removed pre-adoption Workflow types remain outside the supported set. No change to execution permissions, storage authority, provider guarantees, or same-host durability is adopted.
+
+**Evidence.** [Initial red end-to-end evidence](validation/scope-loops-red-2026-09-07.md) records the pre-implementation failures. Implementation validation must separately record Temporal closure, committed artifacts, restart behavior, boundary failures, existing-language regression checks, and presentation checks. This decision is not itself evidence that those gates passed.
+
+
+## ADR-020 — Explicit provider session continuity within repeated scopes
+
+**Context.** Repeated scopes currently start new leaf invocations each iteration. An author may want each agent to continue its previous provider conversation while still receiving the next iteration's explicit inputs. Sharing one conversation among parallel agents or relying on a worker's unbound session string would violate task isolation and recovery expectations.
+
+**Decision.** Add `scope.loop.agent_sessions: fresh | resume`, defaulting to fresh. Preserve absent fields and the existing default execution path. Resume creates an interpreter-owned affinity map for one repeated-scope activation, keyed by descendant leaf path and mapped source position. Loop-free scopes propagate that owner. A nested repeated scope owns an independent policy and map, defaulting to fresh; a new outer activation creates a new inner map. A leaf's own loop and retry semantics remain unchanged.
+
+Only accepted Activity results update affinity. The descriptor binds actual provider, canonical workspace, and observed session ID in hash-bound receipts, Activity results, heartbeat checkpoints, and recovery metadata. Provider and canonical-workspace identity must match before spawning a resumed process. Canonicalization belongs in the Activity, never in Workflow code. Changed inputs do not invalidate session reuse: `loop.next` and explicit input bindings continue to govern data flow; the conversation is supplementary context, not accepted workflow output.
+
+The first encounter or absence of a recorded session ID starts fresh and emits an explicit `node.session` event with `action: fresh` and `reason: no_recorded_session`. A valid reuse emits `action: resume`. Resume failure follows existing operator recovery rather than silently falling back. Successful explicit fresh-session recovery replaces future affinity. Provider/workspace mismatch is an integrity failure that cannot be repaired by retrying the same bound session.
+
+**Consequences.** This refines ADR-019's iteration execution semantics and ADR-005's session-bound recovery without changing output acceptance, fan-in, permissions, or the default fresh behavior. Map positions are affinity identities; reordering data changes which item occupies that identity. Local provider session availability is required; this adds no cross-workspace or machine portability guarantee. Simulation or controlled adapter tests do not establish live provider reliability.
+
+**Evidence.** [Initial session-policy red evidence](validation/scope-sessions-red-2026-09-07.md) precedes implementation. Record adapter invocation, accepted session metadata, changed inputs, sibling/nested isolation, missing-ID fallback, recovery/restart, mismatches, and existing-history replay separately before claiming qualification.

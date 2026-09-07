@@ -2,7 +2,7 @@ import { ApplicationFailure, Context } from "@temporalio/activity";
 import Ajv from "ajv";
 import { createHash } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, rm, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { extractHumanAgentMessage, summarizeOutput } from "./agent-stream";
 import {
@@ -16,6 +16,7 @@ import type {
   AgentExecutionResult,
   AgentHeartbeatCheckpoint,
   JsonValue,
+  ProviderSessionAffinity,
   OutputType,
   TimelineEvent,
   TransitionInput,
@@ -46,6 +47,7 @@ interface ActivityRuntime {
   lastProviderEventAt?: string;
   providerFailureMessage?: string;
   providerSessionId?: string;
+  sessionWorkspace?: string;
   processId?: number;
 }
 
@@ -122,7 +124,7 @@ function simulatedValue(type: OutputType, nodeTitle: string, input: Record<strin
 
 function simulatedOutput(execution: AgentExecutionInput): JsonValue {
   if (execution.node.demo_outputs?.length) {
-    return execution.node.demo_outputs[Math.min(execution.iteration - 1, execution.node.demo_outputs.length - 1)];
+    return execution.node.demo_outputs[Math.min((execution.simulationIteration ?? execution.iteration) - 1, execution.node.demo_outputs.length - 1)];
   }
   if (execution.node.demo_output !== undefined) return execution.node.demo_output;
   return Object.fromEntries(
@@ -320,6 +322,9 @@ function heartbeatCheckpoint(
     startedAt: runtime.startedAt,
     ...(runtime.lastProviderEventAt ? { lastProviderEventAt: runtime.lastProviderEventAt } : {}),
     ...(runtime.providerSessionId ? { providerSessionId: runtime.providerSessionId } : {}),
+    ...(execution.captureSessionAffinity && runtime.providerSessionId && runtime.sessionWorkspace ? {
+      sessionAffinity: { provider: execution.mode, canonicalWorkspace: runtime.sessionWorkspace, sessionId: runtime.providerSessionId },
+    } : {}),
     ...(runtime.processId ? { processId: runtime.processId } : {}),
   };
 }
@@ -370,16 +375,26 @@ async function executeAgentInternal(execution: AgentExecutionInput): Promise<Age
     iteration: execution.iteration,
     recoveryCycle: execution.recoveryCycle,
   });
-  const priorProviderSessionId = execution.providerSessionId ?? matchingCheckpoint?.providerSessionId;
+  const canonicalWorkspace = execution.captureSessionAffinity ? await realpath(process.cwd()) : undefined;
+  const priorProviderSessionId = execution.captureSessionAffinity
+    ? matchingCheckpoint?.providerSessionId ?? execution.providerSessionId
+    : execution.providerSessionId ?? matchingCheckpoint?.providerSessionId;
+  const priorAffinity = execution.captureSessionAffinity && matchingCheckpoint?.providerSessionId
+    ? matchingCheckpoint.sessionAffinity
+    : execution.sessionAffinity;
   const runtime: ActivityRuntime = {
     startedAt: new Date().toISOString(),
     providerSessionId: priorProviderSessionId,
+    ...(canonicalWorkspace ? { sessionWorkspace: priorAffinity?.canonicalWorkspace ?? canonicalWorkspace } : {}),
   };
   if (execution.mode === "simulated") {
     runtime.providerSessionId ??= execution.queueItem
       ? `sim-${execution.runId}-${execution.node.id}-${execution.iteration}`
       : `sim-${execution.runId}-${execution.node.id}`;
   }
+  const sessionAffinity = (): ProviderSessionAffinity | undefined => execution.captureSessionAffinity && runtime.providerSessionId && runtime.sessionWorkspace
+    ? { provider: execution.mode, canonicalWorkspace: runtime.sessionWorkspace, sessionId: runtime.providerSessionId }
+    : undefined;
   const checkpoint = (): void => context.heartbeat(heartbeatCheckpoint(execution, attempt, runtime));
 
   await writeJsonArtifact(join(paths.directory, "input.json"), execution.input);
@@ -406,7 +421,7 @@ async function executeAgentInternal(execution: AgentExecutionInput): Promise<Age
       },
     ),
   );
-  checkpoint();
+  if (!execution.captureSessionAffinity) checkpoint();
 
   const writeMessage = (suffix: string, message: string) => recordAgentMessage({
     id: `${execution.runId}:${execution.node.id}:${cyclePrefix(execution)}:attempt:${attempt}:${suffix}`,
@@ -465,6 +480,16 @@ async function executeAgentInternal(execution: AgentExecutionInput): Promise<Age
       return recovered;
     }
 
+    if (execution.captureSessionAffinity) {
+      if (priorProviderSessionId && (!priorAffinity || priorAffinity.provider !== execution.mode || priorAffinity.canonicalWorkspace !== canonicalWorkspace || priorAffinity.sessionId !== priorProviderSessionId)) {
+        throw new Error("Provider session identity does not match provider or canonical workspace");
+      }
+      checkpoint();
+      await recordTransitionStore(transition(execution, `attempt:${attempt}:session`, "node.session", priorProviderSessionId ? "Resuming the recorded provider session" : "No recorded provider session; starting fresh", {
+        policy: "resume", action: priorProviderSessionId ? "resume" : "fresh", reason: priorProviderSessionId ? "recorded_session" : "no_recorded_session",
+        ...(priorProviderSessionId ? { providerSessionId: priorProviderSessionId } : {}),
+      }));
+    }
     await injectedNetworkFailure(execution, attempt, runtime, checkpoint);
 
     let output: JsonValue;
@@ -527,6 +552,7 @@ async function executeAgentInternal(execution: AgentExecutionInput): Promise<Age
       outputSchemaSha256,
       output,
       ...(runtime.providerSessionId ? { providerSessionId: runtime.providerSessionId } : {}),
+      ...(sessionAffinity() ? { sessionAffinity: sessionAffinity() } : {}),
       afterPrimary: () => pauseAfterPrimaryReceipt(execution, attempt),
     });
     const completed = completionTransition(execution);
@@ -553,12 +579,13 @@ async function executeAgentInternal(execution: AgentExecutionInput): Promise<Age
     return {
       output,
       ...(runtime.providerSessionId ? { providerSessionId: runtime.providerSessionId } : {}),
+      ...(sessionAffinity() ? { sessionAffinity: sessionAffinity() } : {}),
       recoveredFromReceipt: false,
       receiptSha256: receipt.receiptSha256,
     };
   } catch (error) {
     if (context.cancellationSignal.aborted) throw error;
-    const failure = classifyAgentFailure(error, runtime.providerSessionId);
+    const failure = { ...classifyAgentFailure(error, runtime.providerSessionId), ...(sessionAffinity() ? { sessionAffinity: sessionAffinity() } : {}) };
     await recordTransitionStore(
       transition(
         execution,
@@ -587,3 +614,5 @@ async function executeAgentInternal(execution: AgentExecutionInput): Promise<Age
 export async function executeAgent(execution: AgentExecutionInput): Promise<AgentExecutionResult> {
   return executeAgentInternal(execution);
 }
+
+export { commitScopeIteration, commitHumanAnswer } from "./scope-artifacts";

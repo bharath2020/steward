@@ -5,6 +5,7 @@ import {
   condition,
   defineUpdate,
   proxyActivities,
+  patched,
   setHandler,
   uuid4,
   workflowInfo,
@@ -19,10 +20,11 @@ import type {
   HumanAnswerReceipt,
   HumanInputRequest,
   JsonValue,
+  ProviderSessionAffinity,
   TransitionInput,
   WorkflowRunInput,
 } from "./contracts";
-import { resolveForEachItems, resolveNodeInputs } from "./resolver";
+import { resolveForEachItems, resolveNodeInputs, resolveValue } from "./resolver";
 import { loopSatisfied } from "./loop";
 import { AGENT_HEARTBEAT_TIMEOUT } from "./execution-policy";
 import { takeQueueWork, type QueueWorkItem } from "./queue";
@@ -171,11 +173,20 @@ export async function stewardWorkflow(run: WorkflowRunInput): Promise<Record<str
     }),
   );
 
+  const usesScopes = run.definition.nodes.some(node => node.kind === "scope");
+  let expandedInstances = 0;
+  const reserveInstances = (count: number): void => {
+    if (!usesScopes) return;
+    if (expandedInstances + count > 1000) throw new Error("Scope expansion exceeds 1000 step instances");
+    expandedInstances += count;
+  };
+
   const executeHumanNode = async (
     node: WorkflowRunInput["definition"]["nodes"][number],
     input: Record<string, JsonValue>,
     nodeWave: number,
   ): Promise<JsonValue> => {
+    reserveInstances(1);
     const question = input.question;
     if (typeof question !== "string" || !question.trim()) {
       throw ApplicationFailure.create({
@@ -235,7 +246,7 @@ export async function stewardWorkflow(run: WorkflowRunInput): Promise<Record<str
       ),
     );
     const output: JsonValue = { answer: accepted.answer };
-    await administrative.recordTransition(
+    await (node.id.includes("~") ? administrative.commitHumanAnswer : administrative.recordTransition)(
       baseTransition(
         run,
         temporalRunId,
@@ -245,7 +256,7 @@ export async function stewardWorkflow(run: WorkflowRunInput): Promise<Record<str
         {
           nodeId: node.id,
           wave: nodeWave,
-          data: { output, durationMs: Math.max(0, Date.parse(receivedAt) - Date.parse(startedAt)) },
+          data: { output, ...(node.id.includes("~") ? { requestId } : {}), durationMs: Math.max(0, Date.parse(receivedAt) - Date.parse(startedAt)) },
         },
       ),
     );
@@ -307,18 +318,24 @@ export async function stewardWorkflow(run: WorkflowRunInput): Promise<Record<str
     grantPermits();
   });
 
+  type SessionOwner = { sessions: Map<string, ProviderSessionAffinity>; rootId: string };
   const executeNode = async (
     node: WorkflowRunInput["definition"]["nodes"][number],
     baseInput: Record<string, JsonValue>,
     nodeWave: number,
     queueItem?: { index: number; count: number },
+    enclosingIteration?: number,
+    sessionOwner?: SessionOwner,
   ): Promise<JsonValue> => {
     const attempts = Math.min(5, Math.max(1, run.definition.defaults.retry.maximum_attempts));
     let previous: JsonValue | undefined;
-    let providerSessionId: string | undefined;
+    const sessionKey = sessionOwner ? `${node.id.slice(sessionOwner.rootId.length).replace(/~[0-9]+/g, "")}${queueItem ? `[${queueItem.index}]` : ""}` : undefined;
+    let sessionAffinity = sessionKey ? sessionOwner!.sessions.get(sessionKey) : undefined;
+    let providerSessionId: string | undefined = sessionAffinity?.sessionId;
     const maximum = node.loop?.max_iterations ?? 1;
 
     for (let iteration = 1; iteration <= maximum; iteration += 1) {
+      reserveInstances(1);
       const executionIteration = queueItem ? queueItem.index + 1 : iteration;
       const input = {
         ...baseInput,
@@ -365,10 +382,12 @@ export async function stewardWorkflow(run: WorkflowRunInput): Promise<Record<str
             delayMs: run.delayMs,
             wave: nodeWave,
             iteration: executionIteration,
+            ...(enclosingIteration && !node.loop && !queueItem ? { simulationIteration: enclosingIteration } : {}),
             ...(queueItem ? { queueItem } : {}),
             recoveryCycle,
             receiptToken,
             ...(providerSessionId ? { providerSessionId } : {}),
+            ...(sessionOwner ? { captureSessionAffinity: true as const, ...(sessionAffinity ? { sessionAffinity } : {}) } : {}),
             ...(recovery ? { recovery } : {}),
           });
         } catch (error) {
@@ -449,6 +468,10 @@ export async function stewardWorkflow(run: WorkflowRunInput): Promise<Record<str
           });
         }
         providerSessionId = command.action === "retry_same_session" ? failure.providerSessionId : undefined;
+        if (sessionOwner) {
+          sessionAffinity = command.action === "retry_same_session" ? failure.sessionAffinity : undefined;
+          sessionOwner.sessions.delete(sessionKey!);
+        }
         recovery = {
           action: command.action,
           failureKind: failure.kind,
@@ -465,7 +488,19 @@ export async function stewardWorkflow(run: WorkflowRunInput): Promise<Record<str
         });
       }
       providerSessionId = result.providerSessionId;
-      if (!node.loop || loopSatisfied(node.loop, result.output)) return result.output;
+      if (sessionOwner) {
+        sessionAffinity = result.sessionAffinity;
+        if (sessionAffinity) sessionOwner.sessions.set(sessionKey!, sessionAffinity);
+        else sessionOwner.sessions.delete(sessionKey!);
+      }
+      if (!node.loop) return result.output;
+      const publishOutcome = patched("steward-loop-outcomes-v1");
+      if (loopSatisfied(node.loop, result.output)) {
+        if (publishOutcome) await administrative.recordTransition(baseTransition(run, temporalRunId, `${run.runId}:${node.id}:iteration:${iteration}:satisfied`, "loop.satisfied", `${node.title} met its loop condition`, {
+          nodeId: node.id, wave: nodeWave, data: { iteration, loopOutcome: "condition_met" },
+        }));
+        return result.output;
+      }
       previous = result.output;
       const exhausted = iteration === maximum;
       await administrative.recordTransition(
@@ -475,7 +510,7 @@ export async function stewardWorkflow(run: WorkflowRunInput): Promise<Record<str
           `${run.runId}:${node.id}:iteration:${iteration}:${exhausted ? "exhausted" : "continued"}`,
           exhausted ? "loop.exhausted" : "loop.continued",
           exhausted ? `${node.title} reached its iteration limit` : `${node.title} requested iteration ${iteration + 1}`,
-          { nodeId: node.id, wave: nodeWave, data: { iteration, accepted: exhausted && node.loop.on_exhaustion === "accept_last" } },
+          { nodeId: node.id, wave: nodeWave, data: { iteration, accepted: exhausted && node.loop.on_exhaustion === "accept_last", ...(publishOutcome && exhausted ? { loopOutcome: node.loop.on_exhaustion === "accept_last" ? "exhausted_accepted" : "exhausted_failed" } : {}) } },
         ),
       );
       if (exhausted) {
@@ -488,6 +523,100 @@ export async function stewardWorkflow(run: WorkflowRunInput): Promise<Record<str
       }
     }
     throw new Error(`Loop for ${node.id} ended without a result`);
+  };
+
+  const executeScope = async (
+    node: WorkflowRunInput["definition"]["nodes"][number],
+    input: Record<string, JsonValue>,
+    nodeWave: number,
+    enclosingIteration?: number,
+    inheritedState?: JsonValue,
+    inheritedSessionOwner?: SessionOwner,
+  ): Promise<JsonValue> => {
+    const sessionOwner = node.loop
+      ? node.loop.agent_sessions === "resume" ? { rootId: node.id, sessions: new Map<string, ProviderSessionAffinity>() } : undefined
+      : inheritedSessionOwner;
+    let state = node.loop ? resolveValue(node.loop.initial ?? {}, input, {}) : inheritedState;
+    const maximum = node.loop?.max_iterations ?? 1;
+    for (let iteration = 1; iteration <= maximum; iteration++) {
+      reserveInstances(1);
+      const prefix = `${node.id}~${iteration}`;
+      await administrative.recordTransition(baseTransition(run, temporalRunId, `${run.runId}:${prefix}:started`, "node.started", `${node.title} started scope iteration ${iteration}`, {
+        nodeId: node.id, wave: nodeWave, data: { iteration, input },
+      }));
+      const children = node.nodes!;
+      const localOutputs: Record<string, JsonValue> = {};
+      const localCompleted = new Set<string>();
+      const instances = Object.fromEntries(children.map(child => [child.id, {
+        ...child, id: `${prefix}.${child.id}`, needs: child.needs.map(id => `${prefix}.${id}`),
+      }]));
+      for (const child of children) {
+        const instance = instances[child.id];
+        await administrative.recordTransition(baseTransition(run, temporalRunId, `${run.runId}:${instance.id}:registered`, "node.registered", `${child.title} entered scope ${node.title}`, {
+          nodeId: instance.id, wave: nodeWave,
+          data: { title: child.title, kind: child.kind, definitionId: child.id, parentId: node.id, needs: instance.needs },
+        }));
+      }
+      while (localCompleted.size < children.length) {
+        const ready = children.filter(child => !localCompleted.has(child.id) && child.needs.every(id => localCompleted.has(id)));
+        if (!ready.length) throw new Error(`Scope ${node.id} has no runnable nodes`);
+        const results = await Promise.allSettled(ready.map(async child => {
+          const instance = instances[child.id];
+          const resolved = resolveNodeInputs(child, input, localOutputs, state);
+          const simulationIteration = node.loop ? iteration : enclosingIteration;
+          let output: JsonValue;
+          if (child.kind === "scope") output = await executeScope(instance, resolved, nodeWave, simulationIteration, state, sessionOwner);
+          else if (child.kind === "human") output = await executeHumanNode(instance, resolved, nodeWave);
+          else if (child.for_each) {
+            const items = resolveForEachItems(child, input, localOutputs);
+            if (expandedInstances + items.length > 1000) throw new Error("Scope expansion exceeds 1000 step instances");
+            const mapped = await Promise.allSettled(items.map((item, index) => executeNode(instance, { ...resolved, [child.for_each!.as]: item }, nodeWave, { index, count: items.length }, simulationIteration, sessionOwner)));
+            const failed = mapped.find(result => result.status === "rejected");
+            if (failed?.status === "rejected") throw failed.reason;
+            output = mapped.map(result => (result as PromiseFulfilledResult<JsonValue>).value);
+            await administrative.recordTransition(baseTransition(run, temporalRunId, `${run.runId}:${instance.id}:queue:completed`, "node.completed", `${child.title} committed queued outputs`, {
+              nodeId: instance.id, wave: nodeWave, data: { output, completedItems: items.length, totalItems: items.length },
+            }));
+          } else output = await executeNode(instance, resolved, nodeWave, undefined, simulationIteration, sessionOwner);
+          return { id: child.id, output };
+        }));
+        for (const [index, result] of results.entries()) {
+          if (result.status === "fulfilled") {
+            localOutputs[result.value.id] = result.value.output;
+            localCompleted.add(result.value.id);
+          } else {
+            const failedNode = instances[ready[index].id];
+            await administrative.recordTransition(baseTransition(run, temporalRunId, `${run.runId}:${failedNode.id}:scope-child:failed`, "node.failed", `${failedNode.title} failed`, {
+              nodeId: failedNode.id, wave: nodeWave, data: { error: errorMessage(result.reason) },
+            }));
+          }
+        }
+        const failure = results.find(result => result.status === "rejected");
+        if (failure?.status === "rejected") throw failure.reason;
+      }
+      const output = resolveValue(node.exports!, input, localOutputs, state);
+      await administrative.commitScopeIteration(baseTransition(run, temporalRunId, `${run.runId}:${prefix}:committed`, "scope.iteration_committed", `${node.title} committed scope iteration ${iteration}`, {
+        nodeId: node.id, wave: nodeWave, data: { iteration, output, scopeInput: input, ...(state === undefined ? {} : { state }), children: Object.values(instances).map(child => child.id) },
+      }));
+      const satisfied = !node.loop || loopSatisfied({ ...node.loop, predicate_version: 2 }, output);
+      const exhausted = !satisfied && iteration === maximum;
+      if (satisfied || exhausted) {
+        const loopOutcome = satisfied ? "condition_met" : node.loop!.on_exhaustion === "accept_last" ? "exhausted_accepted" : "exhausted_failed";
+        if (node.loop) await administrative.recordTransition(baseTransition(run, temporalRunId, `${run.runId}:${prefix}:outcome`, exhausted ? "loop.exhausted" : "loop.satisfied", `${node.title}: ${loopOutcome}`, {
+          nodeId: node.id, wave: nodeWave, data: { iteration, loopOutcome, accepted: loopOutcome !== "exhausted_failed" },
+        }));
+        if (loopOutcome === "exhausted_failed") throw new Error(`${node.id} did not satisfy its loop condition after ${maximum} iterations`);
+        await administrative.recordTransition(baseTransition(run, temporalRunId, `${run.runId}:${node.id}:scope:completed`, "node.completed", `${node.title} committed its exported output`, {
+          nodeId: node.id, wave: nodeWave, data: { output, iteration, ...(node.loop ? { loopOutcome } : {}) },
+        }));
+        return output;
+      }
+      state = resolveValue(node.loop!.next ?? {}, input, {}, state, output);
+      await administrative.recordTransition(baseTransition(run, temporalRunId, `${run.runId}:${prefix}:continued`, "loop.continued", `${node.title} requested iteration ${iteration + 1}`, {
+        nodeId: node.id, wave: nodeWave, data: { iteration },
+      }));
+    }
+    throw new Error(`Scope ${node.id} ended without a result`);
   };
 
   try {
@@ -528,6 +657,7 @@ export async function stewardWorkflow(run: WorkflowRunInput): Promise<Record<str
           continue;
         }
         const items = resolveForEachItems(node, run.initialInput, outputs);
+        if (usesScopes && expandedInstances + work.length + items.length > 1000) throw new Error("Scope expansion exceeds 1000 step instances");
         mappedResults[node.id] = new Array<JsonValue>(items.length);
         items.forEach((item, itemIndex) => {
           work.push({
@@ -540,7 +670,9 @@ export async function stewardWorkflow(run: WorkflowRunInput): Promise<Record<str
       }
 
       const results = await Promise.allSettled(
-        work.map((unit) => unit.node.kind === "human"
+        work.map((unit) => unit.node.kind === "scope"
+          ? executeScope(unit.node, unit.input, wave)
+          : unit.node.kind === "human"
           ? executeHumanNode(unit.node, unit.input, wave)
           : executeNode(
               unit.node,
