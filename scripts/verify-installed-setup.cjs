@@ -28,11 +28,13 @@ async function main() {
     assert.equal(state.status, 'completed');
     assert.equal(state.temporalRunId, description.runId);
     const output = read('nodes/review/output.json');
-    const schema = read('nodes/review/schema.json');
-    const receipt = read('nodes/review/completion-receipt.json');
+    const dispatch = fs.readdirSync(`${base}/nodes/review/dispatches`).sort()[0];
+    const dispatchRoot = `nodes/review/dispatches/${dispatch}`;
+    const schema = read(`${dispatchRoot}/schema.json`);
+    const receipt = read(`${dispatchRoot}/completion-receipt.json`);
     const { receiptSha256, ...body } = receipt;
     assert(new Ajv().validate(schema, output));
-    assert.deepEqual(receipt, read('receipts/review-iteration-01.json'));
+    assert.deepEqual(receipt, read(`receipts/review-iteration-01-recovery-0000-${receipt.receiptToken}.json`));
     assert.deepEqual(receipt.output, output);
     assert.equal(receipt.runId, intent.runId);
     assert.equal(receipt.temporalRunId, description.runId);

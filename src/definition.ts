@@ -11,10 +11,20 @@ import type {
   WorkflowDefinition,
   WorkflowGroup,
   NodeLoop,
+  NodeForEach,
   WorkflowNode,
 } from "./contracts";
 
-const OUTPUT_TYPES = new Set<OutputType>(["string", "number", "boolean", "object", "string[]", "number[]"]);
+const OUTPUT_TYPES = new Set<OutputType>([
+  "string",
+  "number",
+  "boolean",
+  "object",
+  "string[]",
+  "number[]",
+  "boolean[]",
+  "object[]",
+]);
 const ajv = new Ajv({ allErrors: true, strict: false });
 
 function fail(message: string): never {
@@ -66,6 +76,29 @@ function normalizeLoop(id: string, raw: unknown): NodeLoop | undefined {
   };
 }
 
+function normalizeForEach(id: string, raw: unknown, defaultMaxParallelism: number): NodeForEach | undefined {
+  if (raw === undefined) return undefined;
+  if (!isRecord(raw)) fail(`node ${id}.for_each must be an object`);
+  if (
+    typeof raw.items !== "string"
+    || !(raw.items === "$input" || raw.items.startsWith("$input.") || raw.items.startsWith("$nodes."))
+  ) {
+    fail(`node ${id}.for_each.items must be an input or node output reference`);
+  }
+  if (typeof raw.as !== "string" || !/^[a-z][a-z0-9_]*$/.test(raw.as)) {
+    fail(`node ${id}.for_each.as must use lowercase letters, numbers, or underscores`);
+  }
+  const maxParallelism = raw.max_parallelism ?? defaultMaxParallelism;
+  if (!Number.isInteger(maxParallelism) || Number(maxParallelism) < 1) {
+    fail(`node ${id}.for_each.max_parallelism must be a positive integer`);
+  }
+  return {
+    items: raw.items,
+    as: raw.as,
+    max_parallelism: Number(maxParallelism),
+  };
+}
+
 function validatePromptSource(id: string, raw: Record<string, unknown>): void {
   const hasFile = Object.hasOwn(raw, "prompt_file");
   if (raw.kind === "human") {
@@ -86,6 +119,7 @@ function normalizeNode(
   id: string,
   raw: unknown,
   defaultProvider: AgentProvider,
+  defaultMaxParallelism: number,
   promptFiles: ReadonlyMap<string, string>,
 ): WorkflowNode {
   if (!/^[a-z][a-z0-9_-]*$/.test(id)) fail(`node id ${id} must use lowercase letters, numbers, - or _`);
@@ -103,6 +137,8 @@ function normalizeNode(
   }
   if (kind === "human" && (typeof raw.question !== "string" || !raw.question.trim())) fail(`node ${id}.question is required`);
   if (kind === "human" && raw.loop !== undefined) fail(`node ${id}.loop is not supported for human input`);
+  if (kind === "human" && raw.for_each !== undefined) fail(`node ${id}.for_each is not supported for human input`);
+  if (raw.loop !== undefined && raw.for_each !== undefined) fail(`node ${id} cannot combine loop and for_each`);
   if (kind === "human" && raw.inputs !== undefined) fail(`node ${id}.inputs is derived from question and must be omitted`);
 
   const declaredOutputs = kind === "human" ? { answer: "string" } : raw.outputs;
@@ -120,6 +156,10 @@ function normalizeNode(
   if (!Array.isArray(needs) || needs.some((item) => typeof item !== "string")) fail(`node ${id}.needs must be a list`);
   const inputs = kind === "human" ? { question: raw.question } : raw.inputs === undefined ? {} : raw.inputs;
   if (!isRecord(inputs)) fail(`node ${id}.inputs must be an object`);
+  const forEach = kind === "agent" ? normalizeForEach(id, raw.for_each, defaultMaxParallelism) : undefined;
+  if (forEach && Object.hasOwn(inputs, forEach.as)) {
+    fail(`node ${id}.inputs.${forEach.as} conflicts with for_each.as`);
+  }
 
   const node: WorkflowNode = {
     id,
@@ -139,6 +179,7 @@ function normalizeNode(
     demo_outputs: kind === "agent" && Array.isArray(raw.demo_outputs) ? (raw.demo_outputs as JsonValue[]) : undefined,
     delay_ms: typeof raw.delay_ms === "number" ? raw.delay_ms : undefined,
     loop: kind === "agent" ? normalizeLoop(id, raw.loop) : undefined,
+    for_each: forEach,
   };
   const validate = ajv.compile(node.outputSchema);
   const examples = node.demo_outputs ?? (node.demo_output === undefined ? [] : [node.demo_output]);
@@ -169,6 +210,28 @@ function validateGraph(nodes: WorkflowNode[]): void {
     visited.add(id);
   };
   nodes.forEach((node) => visit(node.id));
+
+  for (const node of nodes) {
+    if (!node.for_each || node.for_each.items.startsWith("$input")) continue;
+    const match = /^\$nodes\.([a-zA-Z0-9_-]+)\.output(?:\.([a-zA-Z0-9_-]+))?$/.exec(node.for_each.items);
+    if (!match) {
+      fail(`node ${node.id}.for_each.items must reference $input, $input.path, or one declared array output`);
+    }
+    const [, dependencyId, outputName] = match;
+    if (!node.needs.includes(dependencyId)) {
+      fail(`node ${node.id}.for_each.items references ${dependencyId}, which must be listed in needs`);
+    }
+    const dependency = byId[dependencyId];
+    if (dependency?.for_each) {
+      if (outputName !== undefined) {
+        fail(`node ${node.id}.for_each.items must reference the complete mapped output of ${dependencyId}`);
+      }
+      continue;
+    }
+    if (!dependency || outputName === undefined || !dependency.outputs[outputName]?.endsWith("[]")) {
+      fail(`node ${node.id}.for_each.items must reference an array output`);
+    }
+  }
 }
 
 function parseDocument(source: string): Record<string, unknown> & { nodes: Record<string, unknown>; name: string } {
@@ -205,7 +268,8 @@ function compileWorkflow(
   if (Number(maximumAttempts) > 5) fail("defaults.retry.maximum_attempts cannot exceed 5");
   if (typeof delayMs !== "number" || delayMs < 0) fail("defaults.delay_ms must be a non-negative number");
 
-  const nodes = Object.entries(raw.nodes).map(([id, value]) => normalizeNode(id, value, defaultProvider, promptFiles));
+  const nodes = Object.entries(raw.nodes).map(([id, value]) =>
+    normalizeNode(id, value, defaultProvider, Number(maxParallelism), promptFiles));
   const groupsRaw = raw.groups === undefined ? {} : raw.groups;
   if (!isRecord(groupsRaw)) fail("groups must be an object");
   const groups: WorkflowGroup[] = Object.entries(groupsRaw).map(([id, value]) => {
@@ -228,7 +292,7 @@ function compileWorkflow(
   validateGraph(nodes);
 
   const resolvedPrompts = nodes.filter((node) => node.promptSource).map((node) => ({ id: node.id, prompt: node.prompt }));
-  // Preserve legacy hashes for inline-only definitions. Bind file contents for new definitions.
+  // Keep inline definition identity stable while binding file contents when present.
   const canonical = JSON.stringify({ ...raw, sourcePath: undefined, ...(resolvedPrompts.length ? { resolvedPrompts } : {}) });
   return {
     version: 1,

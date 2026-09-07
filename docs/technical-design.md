@@ -1,6 +1,6 @@
 # Steward production technical design
 
-Status: target design, not implemented production behavior. Date: 2026-09-05.
+Status: target design, not implemented production behavior. Date: 2026-09-07.
 
 This design implements the [vision](vision.md) and [adopted decisions](decisions.md). The [CLI specification](cli-architecture-and-product-spec.md) remains the detailed command, presentation, and future language reference. Where it conflicts with this design, this design governs. The [roadmap](production-roadmap.md) governs delivery order.
 
@@ -8,17 +8,16 @@ The [software architecture](software-architecture.md) assigns these contracts to
 
 ## Current baseline and gaps
 
-The current package is a private TypeScript demo. Its build script typechecks without emitting a package. It runs V1 YAML through a V2 Temporal interpreter, with simulated/Codex Activities, agent completion receipts, bounded node loops, human questions, and a disk-backed dashboard.
+The current package is a private TypeScript demo. Its build script typechecks without emitting a package. It runs `version: 1` YAML through the single `stewardWorkflow` Temporal interpreter, with simulated/Codex Activities, agent completion receipts, bounded node loops, human questions, and a disk-backed dashboard.
 
-The current component extraction keeps one package with Steward CLI command modules under `src/cli/`, a Steward Server factory/entrypoint and template adapter under `src/server/`, and the shared Steward Console shell/components/assets under `ui/`. Root compatibility wrappers retain existing npm and recovery-harness entry paths. Board/Review layouts and Dark/Light/System themes share the same event and command code; browser preferences do not alter execution. Build mode adds bounded Codex/Claude V1 authoring and a parser-gated synthetic SVG preview; it does not persist a draft or start Temporal. [ADR-010](decisions.md#adr-010--one-repository-with-cli-server-and-ui-template-boundaries) and [ADR-013](decisions.md#adr-013--agent-assisted-authoring-stays-outside-execution-authority) define these presentation boundaries without changing the legacy runtime. Existing `YAMLFLOW_*` configuration, `yamlflow-` workflow IDs, task queue/workflow types, and schema identifiers retain their established spelling after the Steward display-name approval.
+The current component extraction keeps one package with Steward CLI command modules under `src/cli/`, a Steward Server factory/entrypoint and template adapter under `src/server/`, and the shared Steward Console shell/components/assets under `ui/`. Root wrappers retain existing npm and recovery-harness entry paths. Board/Review layouts and Dark/Light/System themes share the same event and command code; browser preferences do not alter execution. Build mode adds bounded Codex/Claude `version: 1` authoring and a parser-gated synthetic SVG preview; it does not persist a draft or start Temporal. [ADR-010](decisions.md#adr-010--one-repository-with-cli-server-and-ui-template-boundaries), [ADR-013](decisions.md#adr-013--agent-assisted-authoring-stays-outside-execution-authority), and [ADR-016](decisions.md#adr-016--one-pre-adoption-interpreter-without-compatibility-shims) define these boundaries. Some configuration and stored identities retain the earlier YAMLFlow spelling, while new execution uses `stewardWorkflow` exclusively.
 
 Source review on 2026-09-05 found these gaps. They are implementation work, not claims that this document fixes them:
 
 | Gap | Current source | Required change |
 |---|---|---|
 | Human outputs and final results do not use the shared artifact commit path | `src/workflows.ts`, human branch and final transition | Commit schema-valid human and final outputs before graph/result acceptance. |
-| Receipt locations omit recovery cycle, although receipt validation checks it | `src/completion-receipt.ts`, `completionPaths` and identity validation | Separate dispatch evidence from the accepted logical output. |
-| Event sequencing uses process-local maps | `src/store.ts`, `locks` and `messageLocks` | Transactional sequencing, unique IDs, and compare-and-set commits. |
+| The disk projection is serialized only within one Steward worker process | `src/store.ts`, process-local event/message queues | Move projection behind Temporal-owned coordination before supporting worker replicas; do not add a second queue or lock authority. |
 | Complete definitions/inputs/results recur in Activity payloads | `src/workflows.ts`, transition/dispatch/result construction | Bounded descriptors and immutable artifact references. |
 | Dashboard lifecycle and health come from disk | `src/server/index.ts`, `snapshot` and `/health` | Temporal reconciliation and independent liveness/readiness contracts. |
 | Start requests have no stable caller command identity | `src/client.ts`, `src/cli/start.ts`, `/api/runs` | Durable start intent and uncertain-response reconciliation. A browser in-flight guard is not durable deduplication. |
@@ -71,8 +70,8 @@ Language, plan, and interpreter versions are independent:
 |---|---|---|
 | Authored language | `version: 1` | V1 supported; new envelope `yamlflow.dev/v1alpha1` introduced in stages |
 | Normalized input | `WorkflowDefinition` | `yamlflow.execution-plan.v1` |
-| Temporal Workflow type | `yamlAgentWorkflow`, `yamlAgentWorkflowV2` | Preserve both; add `yamlflowInterpreterV3` |
-| Evidence | `agent-completion-receipt.v1` | Versioned common output commit and result manifest; legacy readers retained |
+| Temporal Workflow type | `stewardWorkflow` | Version only after adoption or an incompatible contract change |
+| Evidence | `agent-completion-receipt.v1` | Versioned common output commit and result manifest |
 
 Persist exact source, compiled plan, validated input, and a run manifest before submitting a start. The manifest records schema/compiler/package/worker/executor versions, source/plan/input hashes, effective policy, workspace binding, provider destination, Temporal namespace/task queue, and storage profile. Credential values are never included.
 
@@ -97,11 +96,11 @@ Receipt provenance keeps the originating Temporal Run ID. A continuation may car
 
 Validate YAML syntax with source locations, strict structure, graph/scopes, references, output paths where statically knowable, input schemas, executors, capabilities, policy, and limits before start. Referenced predecessors must be declared dependencies. Runtime validation checks any values that cannot be proven statically. Reject unknown fields, unsupported constructs, remote schema resolution, arbitrary expressions, and unbounded cycles.
 
-Use a separate Ajv 2020 validator for new Draft 2020-12 contracts; retain the legacy dialect validator for V1. Ajv does not mix Draft 2020-12 and older drafts in one instance. [Ajv JSON Schema support](https://ajv.js.org/json-schema.html#draft-2020-12-breaking)
+Use a separate Ajv 2020 validator for future Draft 2020-12 contracts. Ajv does not mix Draft 2020-12 and older drafts in one instance. [Ajv JSON Schema support](https://ajv.js.org/json-schema.html#draft-2020-12-breaking)
 
-Resolve executor selection once: explicit step executor, then workflow default. A simulation override is explicit, recorded in the manifest, and visibly labels the whole run simulated. Legacy V1 run-wide `mode` behavior remains unchanged for legacy executions; migration diagnoses its precedence difference rather than silently changing providers.
+Resolve executor selection once: explicit step executor, then workflow default. A simulation override is explicit, recorded in the manifest, and visibly labels the whole run simulated. The current run-wide `mode` remains explicit until executor selection is compiled into the plan.
 
-The V3 foundation compiles existing DAG, named-limit, node-loop, and human-gate semantics. Nested executable scopes follow in a separate milestone. Unknown future syntax fails validation rather than being flattened into different behavior.
+The compiled-plan foundation covers existing DAG, named-limit, node-loop, and human-gate semantics. Nested executable scopes follow in a separate milestone. Unknown future syntax fails validation rather than being flattened into different behavior.
 
 ## Completion protocol
 
@@ -124,9 +123,9 @@ Hashes establish content identity, not proof against someone with write access t
 
 ## Scheduling, retry, and control semantics
 
-The V3 scheduler releases a step as soon as its own dependencies commit and its parent scope is active. Ready ties use stable compiled ordering. The interpreter reserves per-run scheduling capacity; the execution service acquires all applicable executor quotas atomically within the evidence store before launching a provider. Workflow state and SQL do not share a transaction. Capacity denial releases the scheduling reservation and leads to bounded durable waiting, without partial backend permits or a consumed provider attempt. A human/recovery wait consumes no executor permit.
+The target scheduler releases a step as soon as its own dependencies commit and its parent scope is active. Ready ties use stable compiled ordering. The interpreter reserves per-run scheduling capacity; the execution service acquires all applicable executor quotas atomically within the evidence store before launching a provider. Workflow state and SQL do not share a transaction. Capacity denial releases the scheduling reservation and leads to bounded durable waiting, without partial backend permits or a consumed provider attempt. A human/recovery wait consumes no executor permit.
 
-YAML pools limit concurrency within one run. Operator workspace limits bound all runs on one local runtime; the production shared profile needs coordinated leases for an equivalent global cap. Task queue or per-worker limits must not be advertised as a cluster-wide quota. Retain wave scheduling for legacy runs.
+YAML pools limit concurrency within one run. Operator workspace limits bound all runs on one local runtime; the production shared profile needs coordinated leases for an equivalent global cap. Task queue or per-worker limits must not be advertised as a cluster-wide quota.
 
 Each automatic retry retains the dispatch identity; a deliberate recovery creates a new cycle with a fresh bounded automatic-attempt budget. Same-session recovery requires a matching checkpoint, supported failure class, accessible session data, and the same enforceable policy. A host-local Codex session is not portable merely because its ID was heartbeated. Route it to its session owner or mark it unavailable; never silently substitute a fresh session.
 
@@ -150,7 +149,7 @@ The local application database uses transactions, unique command/event/commit ID
 
 A snapshot includes execution lifecycle, step states, evidence integrity, `lastSeq`, `observedAt`, and reconciliation status (`current`, `stale`, or `unavailable`). Temporal unavailable means status is unconfirmed, not failed or completed. Corrupt projections remain visible with a rebuild/error state instead of disappearing from run lists. Closed executions do not display Resume/recovery commands intended for open executions.
 
-The interpreter emits a typed loop outcome with its predicate identity and iteration count. Projections retain it; shared presentation formats it. Web and TUI do not re-evaluate predicates against output. Missing legacy outcome evidence is shown as unknown. Attempt, iteration, and recovery cycle remain separate counters.
+The interpreter emits a typed loop outcome with its predicate identity and iteration count. Projections retain it; shared presentation formats it. Web and TUI do not re-evaluate predicates against output. Missing outcome evidence is shown as unknown. Attempt, iteration, and recovery cycle remain separate counters.
 
 Stream incremental events from a consistent snapshot cursor. Deduplicate by event ID, paginate events/messages, bound per-client buffers, and disconnect slow clients with a resumable cursor. An expired cursor returns an explicit gap and a new snapshot; it does not pretend retained events are a complete audit. Raw provider protocol is kept out of the default transcript.
 
@@ -191,8 +190,8 @@ Back up durable evidence and artifact references together with a manifest and st
 
 ## Migration and rollback
 
-Inventory existing definitions and open execution types first. Preserve the existing runtime database and run directories; this design makes no in-place migration mandatory. Freeze legacy implementations and dependencies before extracting shared helpers that could change replay or pending Activity behavior.
+Before adoption, current runs use only `stewardWorkflow`; the earlier pre-adoption Workflow types are intentionally not registered. Preserve the existing runtime database and run directories without rewriting histories or receipt identities. Their artifacts remain read-only evidence, while resuming one of those executions requires its matching historical bundle.
 
-Build V3 on an isolated task queue/profile, use additive evidence migrations, and canary new runs. Keep legacy runs on their compatible worker path. Do not rewrite open histories or convert their receipt identities. Import legacy artifacts read-only with provenance; missing human receipts remain explicit legacy limitations rather than fabricated attestations.
+After adoption, introduce incompatible interpreter or evidence changes through a new versioned Workflow type and additive evidence migration. Canary new runs, drain compatible histories, and never fabricate missing attestations.
 
-Promote only after the release evidence passes. On regression, stop new starts and route new work back to the last supported profile/bundle. Keep compatible workers for already started V3 histories until drained or repaired. Application rollback must not blindly downgrade a migrated database; use an expand/contract migration window and a tested restore plan. The [roadmap](production-roadmap.md) defines the stop conditions and evidence owners.
+Promote only after the release evidence passes. On regression, stop new starts and route new work back to the last supported profile/bundle. After adoption, keep compatible workers for histories under every supported version until drained or repaired. Application rollback must not blindly downgrade a migrated database; use an expand/contract migration window and a tested restore plan. The [roadmap](production-roadmap.md) defines the stop conditions and evidence owners.

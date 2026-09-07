@@ -133,6 +133,19 @@ export function rebuildState(
       ]),
     ),
   };
+  const completedQueueItems = new Map<string, Set<number>>();
+  const waitingRecoveries = (node: RunState["nodes"][string]): AgentRecoveryRequest[] =>
+    (node.recoveryRequests ?? []).filter((request) => request.status === "waiting");
+  const restoreRecoveryWait = (node: RunState["nodes"][string]): boolean => {
+    const waiting = waitingRecoveries(node);
+    if (waiting.length === 0) return false;
+    node.status = "awaiting_recovery";
+    node.phase = waiting.length === 1
+      ? "Recovery decision required"
+      : `${waiting.length} recovery decisions required`;
+    node.error = waiting[0].failure.message;
+    return true;
+  };
 
   for (const event of events) {
     state.updatedAt = event.at;
@@ -148,9 +161,14 @@ export function rebuildState(
           node.attempt = typeof data.attempt === "number" ? data.attempt : 1;
           node.iteration = typeof data.iteration === "number" ? data.iteration : 1;
           node.iterationCount = Math.max(node.iterationCount ?? 0, node.iteration);
+          if (data.queueItem && typeof data.queueItem === "object" && !Array.isArray(data.queueItem)) {
+            const queueItem = data.queueItem as Record<string, JsonValue>;
+            node.totalItems = typeof queueItem.count === "number" ? queueItem.count : node.totalItems;
+          }
           node.input = data.input;
           delete node.error;
           delete node.completedAt;
+          restoreRecoveryWait(node);
         }
         break;
       case "node.phase":
@@ -163,20 +181,47 @@ export function rebuildState(
           node.completedAt = event.at;
           node.output = data.output;
           node.durationMs = typeof data.durationMs === "number" ? data.durationMs : undefined;
+          node.completedItems = typeof data.completedItems === "number" ? data.completedItems : node.completedItems;
+          node.totalItems = typeof data.totalItems === "number" ? data.totalItems : node.totalItems;
+        }
+        break;
+      case "node.item_completed":
+        if (node) {
+          const queueItem = data.queueItem && typeof data.queueItem === "object" && !Array.isArray(data.queueItem)
+            ? data.queueItem as Record<string, JsonValue>
+            : {};
+          const itemIndex = typeof queueItem.index === "number"
+            ? queueItem.index
+            : typeof data.iteration === "number"
+              ? data.iteration - 1
+              : undefined;
+          const committed = completedQueueItems.get(node.id) ?? new Set<number>();
+          if (itemIndex !== undefined) committed.add(itemIndex);
+          completedQueueItems.set(node.id, committed);
+          node.status = "running";
+          node.completedItems = committed.size;
+          node.totalItems = typeof queueItem.count === "number" ? queueItem.count : node.totalItems;
+          node.phase = node.totalItems === undefined
+            ? `${node.completedItems} queued items committed`
+            : `${node.completedItems} / ${node.totalItems} queued items committed`;
+          restoreRecoveryWait(node);
         }
         break;
       case "node.receipt_recovered":
         if (node) {
           node.status = "running";
           node.phase = "Recovered committed output from receipt";
+          restoreRecoveryWait(node);
         }
         break;
       case "recovery.required":
         if (node && data.request && typeof data.request === "object" && !Array.isArray(data.request)) {
-          node.status = "awaiting_recovery";
-          node.phase = "Recovery decision required";
-          node.recovery = data.request as unknown as AgentRecoveryRequest;
-          node.error = node.recovery.failure.message;
+          const request = data.request as unknown as AgentRecoveryRequest;
+          node.recoveryRequests ??= [];
+          const existing = node.recoveryRequests.findIndex((candidate) => candidate.requestId === request.requestId);
+          if (existing === -1) node.recoveryRequests.push(request);
+          else node.recoveryRequests[existing] = request;
+          restoreRecoveryWait(node);
         }
         break;
       case "human.required":
@@ -200,16 +245,23 @@ export function rebuildState(
       case "recovery.accepted":
         if (node) {
           const action = typeof data.action === "string" ? data.action : undefined;
-          if (node.recovery) {
-            node.recovery.status = "received";
-            node.recovery.receivedAt = typeof data.receivedAt === "string" ? data.receivedAt : event.at;
+          const requestId = typeof data.requestId === "string" ? data.requestId : undefined;
+          const recovery = node.recoveryRequests?.find((request) => request.requestId === requestId);
+          if (recovery) {
+            recovery.status = "received";
+            recovery.receivedAt = typeof data.receivedAt === "string" ? data.receivedAt : event.at;
             if (action === "retry_same_session" || action === "retry_fresh_session" || action === "abort_workflow") {
-              node.recovery.command = { requestId: node.recovery.requestId, action };
+              recovery.command = { requestId: recovery.requestId, action };
             }
           }
-          node.status = action === "abort_workflow" ? "failed" : "running";
-          node.phase = event.message;
-          if (action !== "abort_workflow") delete node.error;
+          if (action === "abort_workflow") {
+            node.status = "failed";
+            node.phase = event.message;
+          } else if (!restoreRecoveryWait(node)) {
+            node.status = "running";
+            node.phase = event.message;
+            delete node.error;
+          }
         }
         break;
       case "loop.continued":
@@ -229,6 +281,7 @@ export function rebuildState(
           node.status = "failed";
           node.phase = "Attempt failed";
           node.error = typeof data.error === "string" ? data.error : event.message;
+          restoreRecoveryWait(node);
         }
         break;
       case "run.completed":

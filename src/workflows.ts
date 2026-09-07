@@ -22,9 +22,10 @@ import type {
   TransitionInput,
   WorkflowRunInput,
 } from "./contracts";
-import { resolveNodeInputs } from "./resolver";
+import { resolveForEachItems, resolveNodeInputs } from "./resolver";
 import { loopSatisfied } from "./loop";
 import { AGENT_HEARTBEAT_TIMEOUT } from "./execution-policy";
+import { takeQueueWork, type QueueWorkItem } from "./queue";
 
 export const submitAgentRecoveryUpdate = defineUpdate<AgentRecoveryReceipt, [AgentRecoveryCommand]>("submitAgentRecovery");
 export const submitHumanInputUpdate = defineUpdate<HumanAnswerReceipt, [HumanAnswerCommand]>("submitHumanInput");
@@ -36,20 +37,6 @@ const administrative = proxyActivities<typeof activities>({
 
 const executors = [1, 2, 3, 4, 5].map((maximumAttempts) =>
   proxyActivities<typeof activities>({
-    startToCloseTimeout: "30 minutes",
-    heartbeatTimeout: "10 seconds",
-    retry: {
-      maximumAttempts,
-      initialInterval: "1 second",
-      backoffCoefficient: 2,
-      maximumInterval: "15 seconds",
-      nonRetryableErrorTypes: ["OutputValidationError"],
-    },
-  }).executeAgent,
-);
-
-const resilientExecutors = [1, 2, 3, 4, 5].map((maximumAttempts) =>
-  proxyActivities<typeof activities>({
     startToCloseTimeout: "12 hours",
     heartbeatTimeout: AGENT_HEARTBEAT_TIMEOUT,
     cancellationType: ActivityCancellationType.WAIT_CANCELLATION_COMPLETED,
@@ -59,7 +46,7 @@ const resilientExecutors = [1, 2, 3, 4, 5].map((maximumAttempts) =>
       backoffCoefficient: 2,
       maximumInterval: "15 seconds",
     },
-  }).executeAgentV2,
+  }).executeAgent,
 );
 
 function baseTransition(
@@ -88,165 +75,6 @@ function errorMessage(reason: unknown): string {
   return String(reason);
 }
 
-function readyBatches(run: WorkflowRunInput, ready: WorkflowRunInput["definition"]["nodes"]): WorkflowRunInput["definition"]["nodes"][] {
-  const remaining = [...ready];
-  const batches: WorkflowRunInput["definition"]["nodes"][] = [];
-  const groups = Object.fromEntries(run.definition.groups.map((group) => [group.id, group]));
-  while (remaining.length) {
-    const counts: Record<string, number> = {};
-    const batch: typeof ready = [];
-    for (let index = 0; index < remaining.length && batch.length < run.definition.defaults.max_parallelism;) {
-      const node = remaining[index];
-      const key = node.group ?? "__ungrouped";
-      const limit = node.group ? groups[node.group]?.max_parallelism ?? run.definition.defaults.max_parallelism : run.definition.defaults.max_parallelism;
-      if ((counts[key] ?? 0) < limit) {
-        counts[key] = (counts[key] ?? 0) + 1;
-        batch.push(node);
-        remaining.splice(index, 1);
-      } else index += 1;
-    }
-    if (!batch.length) throw new Error("Group concurrency limits blocked every ready node");
-    batches.push(batch);
-  }
-  return batches;
-}
-
-async function executeNode(
-  run: WorkflowRunInput,
-  temporalRunId: string,
-  node: WorkflowRunInput["definition"]["nodes"][number],
-  baseInput: Record<string, JsonValue>,
-  wave: number,
-): Promise<JsonValue> {
-  const attempts = Math.min(5, Math.max(1, run.definition.defaults.retry.maximum_attempts));
-  let previous: JsonValue | undefined;
-  const maximum = node.loop?.max_iterations ?? 1;
-  for (let iteration = 1; iteration <= maximum; iteration += 1) {
-    const input = {
-      ...baseInput,
-      ...(node.loop && previous !== undefined ? { [node.loop.carry_as]: previous } : {}),
-      ...(node.loop ? { __iteration: iteration } : {}),
-    };
-    const result = await executors[attempts - 1]({
-      runId: run.runId,
-      temporalRunId,
-      definition: run.definition,
-      node,
-      input,
-      mode: run.mode,
-      delayMs: run.delayMs,
-      wave,
-      iteration,
-    });
-    if (!node.loop || loopSatisfied(node.loop, result)) return result;
-    previous = result;
-    const exhausted = iteration === maximum;
-    await administrative.recordTransition(
-      baseTransition(
-        run,
-        temporalRunId,
-        `${run.runId}:${node.id}:iteration:${iteration}:${exhausted ? "exhausted" : "continued"}`,
-        exhausted ? "loop.exhausted" : "loop.continued",
-        exhausted ? `${node.title} reached its iteration limit` : `${node.title} requested iteration ${iteration + 1}`,
-        { nodeId: node.id, wave, data: { iteration, accepted: exhausted && node.loop.on_exhaustion === "accept_last" } },
-      ),
-    );
-    if (exhausted) {
-      if (node.loop.on_exhaustion === "accept_last") return result;
-      throw ApplicationFailure.create({
-        message: `${node.id} did not satisfy its loop condition after ${maximum} iterations`,
-        type: "LoopExhaustedError",
-        nonRetryable: true,
-      });
-    }
-  }
-  throw new Error(`Loop for ${node.id} ended without a result`);
-}
-
-export async function yamlAgentWorkflow(run: WorkflowRunInput): Promise<Record<string, JsonValue>> {
-  const temporalRunId = workflowInfo().runId;
-  const outputs: Record<string, JsonValue> = {};
-  const completed = new Set<string>();
-  let wave = 0;
-
-  await administrative.initializeRun(
-    baseTransition(run, temporalRunId, `${run.runId}:run:started`, "run.started", "Durable workflow started", {
-      data: {
-        sourcePath: run.definition.sourcePath,
-        definitionHash: run.definition.definitionHash,
-        mode: run.mode,
-      },
-    }),
-  );
-
-  try {
-    while (completed.size < run.definition.nodes.length) {
-      const ready = run.definition.nodes.filter(
-        (node) => !completed.has(node.id) && node.needs.every((dependency) => completed.has(dependency)),
-      );
-      if (ready.length === 0) {
-        throw ApplicationFailure.create({
-          message: "No runnable nodes remain; the graph is blocked",
-          type: "BlockedGraphError",
-          nonRetryable: true,
-        });
-      }
-      wave += 1;
-      await administrative.recordTransition(
-        baseTransition(run, temporalRunId, `${run.runId}:wave:${wave}:started`, "wave.started", `Wave ${wave} released ${ready.length} agent${ready.length === 1 ? "" : "s"}`, {
-          wave,
-          data: { nodes: ready.map((node) => node.id) },
-        }),
-      );
-
-      const failures: string[] = [];
-      for (const chunk of readyBatches(run, ready)) {
-        const results = await Promise.allSettled(
-          chunk.map((node) => {
-            return executeNode(run, temporalRunId, node, resolveNodeInputs(node, run.initialInput, outputs), wave);
-          }),
-        );
-        results.forEach((result, resultIndex) => {
-          const node = chunk[resultIndex];
-          if (result.status === "fulfilled") outputs[node.id] = result.value;
-          else failures.push(`${node.id}: ${errorMessage(result.reason)}`);
-        });
-      }
-      if (failures.length > 0) {
-        throw ApplicationFailure.create({
-          message: failures.join("; "),
-          type: "NodeExecutionError",
-          nonRetryable: true,
-        });
-      }
-      ready.forEach((node) => completed.add(node.id));
-      await administrative.recordTransition(
-        baseTransition(run, temporalRunId, `${run.runId}:wave:${wave}:completed`, "wave.completed", `Wave ${wave} committed; joins re-evaluated`, {
-          wave,
-          data: { nodes: ready.map((node) => node.id) },
-        }),
-      );
-    }
-
-    await administrative.recordTransition(
-      baseTransition(run, temporalRunId, `${run.runId}:run:completed`, "run.completed", "All agent outputs committed", {
-        wave,
-        data: { outputs },
-      }),
-    );
-    return outputs;
-  } catch (error) {
-    const message = errorMessage(error);
-    await administrative.recordTransition(
-      baseTransition(run, temporalRunId, `${run.runId}:run:failed`, "run.failed", "Workflow stopped after a failed node", {
-        wave,
-        data: { error: message },
-      }),
-    );
-    throw error;
-  }
-}
-
 function isAgentFailureSummary(value: unknown): value is AgentFailureSummary {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const candidate = value as Partial<AgentFailureSummary>;
@@ -271,11 +99,7 @@ function recoveryFailure(error: unknown, previousSessionId?: string): AgentFailu
   };
 }
 
-/**
- * V2 adds session-aware retry, durable operator recovery, and hash-bound
- * completion reconciliation. V1 remains above unchanged for open-history replay.
- */
-export async function yamlAgentWorkflowV2(run: WorkflowRunInput): Promise<Record<string, JsonValue>> {
+export async function stewardWorkflow(run: WorkflowRunInput): Promise<Record<string, JsonValue>> {
   const temporalRunId = workflowInfo().runId;
   const outputs: Record<string, JsonValue> = {};
   const completed = new Set<string>();
@@ -337,17 +161,17 @@ export async function yamlAgentWorkflowV2(run: WorkflowRunInput): Promise<Record
   );
 
   await administrative.initializeRun(
-    baseTransition(run, temporalRunId, `${run.runId}:run:started`, "run.started", "Durable workflow V2 started", {
+    baseTransition(run, temporalRunId, `${run.runId}:run:started`, "run.started", "Durable Steward workflow started", {
       data: {
         sourcePath: run.definition.sourcePath,
         definitionHash: run.definition.definitionHash,
         mode: run.mode,
-        workflowType: "yamlAgentWorkflowV2",
+        workflowType: "stewardWorkflow",
       },
     }),
   );
 
-  const executeHumanNodeV2 = async (
+  const executeHumanNode = async (
     node: WorkflowRunInput["definition"]["nodes"][number],
     input: Record<string, JsonValue>,
     nodeWave: number,
@@ -428,10 +252,66 @@ export async function yamlAgentWorkflowV2(run: WorkflowRunInput): Promise<Record
     return output;
   };
 
-  const executeNodeV2 = async (
+  type PermitWaiter = QueueWorkItem & {
+    token: number;
+    resolve: (release: () => void) => void;
+  };
+  const groupLimits = Object.fromEntries(
+    run.definition.groups.map((group) => [
+      group.id,
+      group.max_parallelism ?? run.definition.defaults.max_parallelism,
+    ]),
+  );
+  const activeGroups: Record<string, number> = Object.create(null) as Record<string, number>;
+  const activeNodes: Record<string, number> = Object.create(null) as Record<string, number>;
+  let activePermitCount = 0;
+  let permitToken = 0;
+  let permitWaiters: PermitWaiter[] = [];
+
+  const grantPermits = (): void => {
+    const next = takeQueueWork(
+      permitWaiters,
+      run.definition.defaults.max_parallelism - activePermitCount,
+      groupLimits,
+      activeGroups,
+      activeNodes,
+    );
+    permitWaiters = next.remaining;
+    for (const waiter of next.selected) {
+      const groupKey = waiter.group ?? "__ungrouped";
+      activePermitCount += 1;
+      activeGroups[groupKey] = (activeGroups[groupKey] ?? 0) + 1;
+      activeNodes[waiter.nodeId] = (activeNodes[waiter.nodeId] ?? 0) + 1;
+      let released = false;
+      waiter.resolve(() => {
+        if (released) return;
+        released = true;
+        activePermitCount -= 1;
+        activeGroups[groupKey] -= 1;
+        activeNodes[waiter.nodeId] -= 1;
+        grantPermits();
+      });
+    }
+  };
+
+  const acquireExecutionPermit = (
+    node: WorkflowRunInput["definition"]["nodes"][number],
+  ): Promise<() => void> => new Promise((resolve) => {
+    permitWaiters.push({
+      token: permitToken++,
+      nodeId: node.id,
+      group: node.group,
+      nodeMaxParallelism: node.for_each?.max_parallelism,
+      resolve,
+    });
+    grantPermits();
+  });
+
+  const executeNode = async (
     node: WorkflowRunInput["definition"]["nodes"][number],
     baseInput: Record<string, JsonValue>,
     nodeWave: number,
+    queueItem?: { index: number; count: number },
   ): Promise<JsonValue> => {
     const attempts = Math.min(5, Math.max(1, run.definition.defaults.retry.maximum_attempts));
     let previous: JsonValue | undefined;
@@ -439,10 +319,12 @@ export async function yamlAgentWorkflowV2(run: WorkflowRunInput): Promise<Record
     const maximum = node.loop?.max_iterations ?? 1;
 
     for (let iteration = 1; iteration <= maximum; iteration += 1) {
+      const executionIteration = queueItem ? queueItem.index + 1 : iteration;
       const input = {
         ...baseInput,
         ...(node.loop && previous !== undefined ? { [node.loop.carry_as]: previous } : {}),
         ...(node.loop ? { __iteration: iteration } : {}),
+        ...(queueItem ? { __queue_index: queueItem.index, __queue_count: queueItem.count } : {}),
       };
       let recoveryCycle = 0;
       let recovery: {
@@ -450,7 +332,7 @@ export async function yamlAgentWorkflowV2(run: WorkflowRunInput): Promise<Record
         failureKind: AgentFailureSummary["kind"];
         message: string;
       } | undefined;
-      let result: Awaited<ReturnType<(typeof resilientExecutors)[number]>>;
+      let result: Awaited<ReturnType<(typeof executors)[number]>> | undefined;
 
       while (true) {
         if (workflowAbort) {
@@ -461,8 +343,19 @@ export async function yamlAgentWorkflowV2(run: WorkflowRunInput): Promise<Record
           });
         }
         const receiptToken = uuid4();
+        const releasePermit = await acquireExecutionPermit(node);
+        const abortAfterPermit = workflowAbort as { nodeId: string; message: string } | undefined;
+        if (abortAfterPermit) {
+          releasePermit();
+          throw ApplicationFailure.create({
+            message: abortAfterPermit.message,
+            type: "OperatorAbortedWorkflow",
+            nonRetryable: true,
+          });
+        }
+        let activityError: unknown;
         try {
-          result = await resilientExecutors[attempts - 1]({
+          result = await executors[attempts - 1]({
             runId: run.runId,
             temporalRunId,
             definition: run.definition,
@@ -471,94 +364,106 @@ export async function yamlAgentWorkflowV2(run: WorkflowRunInput): Promise<Record
             mode: run.mode,
             delayMs: run.delayMs,
             wave: nodeWave,
-            iteration,
+            iteration: executionIteration,
+            ...(queueItem ? { queueItem } : {}),
             recoveryCycle,
             receiptToken,
             ...(providerSessionId ? { providerSessionId } : {}),
             ...(recovery ? { recovery } : {}),
           });
-          break;
         } catch (error) {
-          const failure = recoveryFailure(error, providerSessionId);
-          const requestId = `${run.runId}:${node.id}:iteration:${iteration}:recovery:${recoveryCycle + 1}`;
-          const requestedAt = new Date().toISOString();
-          const request: AgentRecoveryRequest = {
-            requestId,
-            nodeId: node.id,
-            iteration,
-            recoveryCycle: recoveryCycle + 1,
-            status: "waiting",
-            failure,
-            canResumeSession: Boolean(failure.providerSessionId)
-              && failure.kind !== "context_exhausted"
-              && failure.kind !== "integrity_error",
-            requestedAt,
-          };
-          recoveryRequests[requestId] = request;
-          await administrative.recordTransition(
-            baseTransition(
-              run,
-              temporalRunId,
-              `${requestId}:required`,
-              "recovery.required",
-              `${node.title} exhausted its automatic attempts and needs an operator decision`,
-              {
-                nodeId: node.id,
-                wave: nodeWave,
-                data: { request: request as unknown as JsonValue },
-              },
-            ),
-          );
-          await condition(() => Boolean(recoveryCommands[requestId]) || Boolean(workflowAbort));
-          const concurrentAbort = workflowAbort as { nodeId: string; message: string } | undefined;
-          if (concurrentAbort && !recoveryCommands[requestId]) {
-            throw ApplicationFailure.create({
-              message: concurrentAbort.message,
-              type: "OperatorAbortedWorkflow",
-              nonRetryable: true,
-            });
-          }
-          const command = recoveryCommands[requestId]!;
-          await administrative.recordTransition(
-            baseTransition(
-              run,
-              temporalRunId,
-              `${requestId}:accepted`,
-              "recovery.accepted",
-              command.action === "retry_same_session"
-                ? `${node.title} will resume its recorded provider session with a fresh attempt budget`
-                : command.action === "retry_fresh_session"
-                  ? `${node.title} will restart in a fresh provider session with a fresh attempt budget`
-                  : `${node.title} was aborted by the operator`,
-              {
-                nodeId: node.id,
-                wave: nodeWave,
-                data: {
-                  requestId,
-                  action: command.action,
-                  receivedAt: request.receivedAt ?? new Date().toISOString(),
-                },
-              },
-            ),
-          );
-          if (command.action === "abort_workflow") {
-            workflowAbort = { nodeId: node.id, message: `${node.title} was aborted by the operator.` };
-            throw ApplicationFailure.create({
-              message: workflowAbort.message,
-              type: "OperatorAbortedWorkflow",
-              nonRetryable: true,
-            });
-          }
-          providerSessionId = command.action === "retry_same_session" ? failure.providerSessionId : undefined;
-          recovery = {
-            action: command.action,
-            failureKind: failure.kind,
-            message: failure.message,
-          };
-          recoveryCycle += 1;
+          activityError = error;
+        } finally {
+          releasePermit();
         }
+        if (activityError === undefined) break;
+
+        const failure = recoveryFailure(activityError, providerSessionId);
+        const requestId = `${run.runId}:${node.id}:iteration:${executionIteration}:recovery:${recoveryCycle + 1}`;
+        const requestedAt = new Date().toISOString();
+        const request: AgentRecoveryRequest = {
+          requestId,
+          nodeId: node.id,
+          iteration: executionIteration,
+          recoveryCycle: recoveryCycle + 1,
+          status: "waiting",
+          failure,
+          canResumeSession: Boolean(failure.providerSessionId)
+            && failure.kind !== "context_exhausted"
+            && failure.kind !== "integrity_error",
+          requestedAt,
+        };
+        recoveryRequests[requestId] = request;
+        await administrative.recordTransition(
+          baseTransition(
+            run,
+            temporalRunId,
+            `${requestId}:required`,
+            "recovery.required",
+            `${node.title} exhausted its automatic attempts and needs an operator decision`,
+            {
+              nodeId: node.id,
+              wave: nodeWave,
+              data: { request: request as unknown as JsonValue },
+            },
+          ),
+        );
+        await condition(() => Boolean(recoveryCommands[requestId]) || Boolean(workflowAbort));
+        const concurrentAbort = workflowAbort as { nodeId: string; message: string } | undefined;
+        if (concurrentAbort && !recoveryCommands[requestId]) {
+          throw ApplicationFailure.create({
+            message: concurrentAbort.message,
+            type: "OperatorAbortedWorkflow",
+            nonRetryable: true,
+          });
+        }
+        const command = recoveryCommands[requestId]!;
+        await administrative.recordTransition(
+          baseTransition(
+            run,
+            temporalRunId,
+            `${requestId}:accepted`,
+            "recovery.accepted",
+            command.action === "retry_same_session"
+              ? `${node.title} will resume its recorded provider session with a fresh attempt budget`
+              : command.action === "retry_fresh_session"
+                ? `${node.title} will restart in a fresh provider session with a fresh attempt budget`
+                : `${node.title} was aborted by the operator`,
+            {
+              nodeId: node.id,
+              wave: nodeWave,
+              data: {
+                requestId,
+                action: command.action,
+                receivedAt: request.receivedAt ?? new Date().toISOString(),
+              },
+            },
+          ),
+        );
+        if (command.action === "abort_workflow") {
+          workflowAbort = { nodeId: node.id, message: `${node.title} was aborted by the operator.` };
+          throw ApplicationFailure.create({
+            message: workflowAbort.message,
+            type: "OperatorAbortedWorkflow",
+            nonRetryable: true,
+          });
+        }
+        providerSessionId = command.action === "retry_same_session" ? failure.providerSessionId : undefined;
+        recovery = {
+          action: command.action,
+          failureKind: failure.kind,
+          message: failure.message,
+        };
+        recoveryCycle += 1;
       }
 
+      if (!result) {
+        throw ApplicationFailure.create({
+          message: `${node.id} ended without an Activity result`,
+          type: "MissingActivityResultError",
+          nonRetryable: true,
+        });
+      }
       providerSessionId = result.providerSessionId;
       if (!node.loop || loopSatisfied(node.loop, result.output)) return result.output;
       previous = result.output;
@@ -606,27 +511,98 @@ export async function yamlAgentWorkflowV2(run: WorkflowRunInput): Promise<Record
       );
 
       const failures: string[] = [];
-      for (const chunk of readyBatches(run, ready)) {
-        const results = await Promise.allSettled(
-          chunk.map((node) => {
-            const resolved = resolveNodeInputs(node, run.initialInput, outputs);
-            return node.kind === "human"
-              ? executeHumanNodeV2(node, resolved, wave)
-              : executeNodeV2(node, resolved, wave);
-          }),
-        );
-        results.forEach((result, resultIndex) => {
-          const node = chunk[resultIndex];
-          if (result.status === "fulfilled") outputs[node.id] = result.value;
-          else failures.push(`${node.id}: ${errorMessage(result.reason)}`);
+      const mappedResults: Record<string, JsonValue[]> = {};
+      const mappedFailures: Record<string, string[]> = {};
+
+      type WorkUnit = {
+        node: WorkflowRunInput["definition"]["nodes"][number];
+        input: Record<string, JsonValue>;
+        itemIndex?: number;
+        itemCount?: number;
+      };
+      const work: WorkUnit[] = [];
+      for (const node of ready) {
+        const resolved = resolveNodeInputs(node, run.initialInput, outputs);
+        if (!node.for_each) {
+          work.push({ node, input: resolved });
+          continue;
+        }
+        const items = resolveForEachItems(node, run.initialInput, outputs);
+        mappedResults[node.id] = new Array<JsonValue>(items.length);
+        items.forEach((item, itemIndex) => {
+          work.push({
+            node,
+            input: { ...resolved, [node.for_each!.as]: item },
+            itemIndex,
+            itemCount: items.length,
+          });
         });
       }
+
+      const results = await Promise.allSettled(
+        work.map((unit) => unit.node.kind === "human"
+          ? executeHumanNode(unit.node, unit.input, wave)
+          : executeNode(
+              unit.node,
+              unit.input,
+              wave,
+              unit.itemIndex === undefined
+                ? undefined
+                : { index: unit.itemIndex, count: unit.itemCount! },
+            )),
+      );
+      results.forEach((result, resultIndex) => {
+        const unit = work[resultIndex];
+        if (result.status === "fulfilled") {
+          if (unit.itemIndex === undefined) outputs[unit.node.id] = result.value;
+          else mappedResults[unit.node.id][unit.itemIndex] = result.value;
+        } else {
+          const label = unit.itemIndex === undefined ? unit.node.id : `${unit.node.id}[${unit.itemIndex}]`;
+          const message = `${label}: ${errorMessage(result.reason)}`;
+          failures.push(message);
+          if (unit.itemIndex !== undefined) {
+            (mappedFailures[unit.node.id] ??= []).push(message);
+          }
+        }
+      });
       if (failures.length > 0) {
+        for (const [nodeId, errors] of Object.entries(mappedFailures)) {
+          const node = ready.find((candidate) => candidate.id === nodeId)!;
+          await administrative.recordTransition(
+            baseTransition(
+              run,
+              temporalRunId,
+              `${run.runId}:${nodeId}:queue:failed`,
+              "node.failed",
+              `${node.title} stopped after ${errors.length} queued item${errors.length === 1 ? "" : "s"} failed`,
+              { nodeId, wave, data: { error: errors.join("; ") } },
+            ),
+          );
+        }
         throw ApplicationFailure.create({
           message: failures.join("; "),
           type: workflowAbort ? "OperatorAbortedWorkflow" : "NodeExecutionError",
           nonRetryable: true,
         });
+      }
+      for (const node of ready) {
+        if (!node.for_each) continue;
+        const output = mappedResults[node.id];
+        outputs[node.id] = output;
+        await administrative.recordTransition(
+          baseTransition(
+            run,
+            temporalRunId,
+            `${run.runId}:${node.id}:queue:completed`,
+            "node.completed",
+            `${node.title} committed ${output.length} queued item${output.length === 1 ? "" : "s"}`,
+            {
+              nodeId: node.id,
+              wave,
+              data: { output, completedItems: output.length, totalItems: output.length },
+            },
+          ),
+        );
       }
       ready.forEach((node) => completed.add(node.id));
       await administrative.recordTransition(
@@ -652,6 +628,11 @@ export async function yamlAgentWorkflowV2(run: WorkflowRunInput): Promise<Record
         data: { error: message },
       }),
     );
-    throw error;
+    if (error instanceof ApplicationFailure || error instanceof ActivityFailure) throw error;
+    throw ApplicationFailure.create({
+      message,
+      type: "WorkflowRuntimeValidationError",
+      nonRetryable: true,
+    });
   }
 }

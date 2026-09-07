@@ -3,7 +3,7 @@ import { link, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
 import type {
   AgentCompletionReceipt,
-  AgentExecutionInputV2,
+  AgentExecutionInput,
   AgentExecutionResult,
   JsonValue,
 } from "./contracts";
@@ -31,11 +31,19 @@ export function sha256Json(value: unknown): string {
   return createHash("sha256").update(canonicalJson(value)).digest("hex");
 }
 
-function iterationDirectory(execution: AgentExecutionInputV2): string {
+function iterationDirectory(execution: AgentExecutionInput): string {
   const nodeDirectory = join(runDirectory(execution.runId), "nodes", execution.node.id);
-  return execution.node.loop
-    ? join(nodeDirectory, "iterations", String(execution.iteration).padStart(2, "0"))
-    : nodeDirectory;
+  if (execution.node.loop) return join(nodeDirectory, "iterations", String(execution.iteration).padStart(2, "0"));
+  if (execution.node.for_each) return join(nodeDirectory, "items", String(execution.iteration).padStart(4, "0"));
+  return nodeDirectory;
+}
+
+function dispatchDirectory(execution: AgentExecutionInput): string {
+  return join(
+    iterationDirectory(execution),
+    "dispatches",
+    `recovery-${String(execution.recoveryCycle).padStart(4, "0")}-${execution.receiptToken}`,
+  );
 }
 
 function confined(runId: string, target: string): string {
@@ -47,25 +55,32 @@ function confined(runId: string, target: string): string {
   return resolved;
 }
 
-export function completionPaths(execution: AgentExecutionInputV2): {
+export function completionPaths(execution: AgentExecutionInput): {
   directory: string;
   outputPath: string;
+  acceptedOutputPath: string;
   loopOutputPath?: string;
   primaryReceiptPath: string;
   mirrorReceiptPath: string;
 } {
-  const directory = iterationDirectory(execution);
+  const acceptedDirectory = iterationDirectory(execution);
+  const directory = dispatchDirectory(execution);
   const nodeDirectory = join(runDirectory(execution.runId), "nodes", execution.node.id);
   return {
     directory: confined(execution.runId, directory),
     outputPath: confined(execution.runId, join(directory, "output.json")),
+    acceptedOutputPath: confined(execution.runId, join(acceptedDirectory, "output.json")),
     ...(execution.node.loop
       ? { loopOutputPath: confined(execution.runId, join(nodeDirectory, "output.json")) }
       : {}),
     primaryReceiptPath: confined(execution.runId, join(directory, "completion-receipt.json")),
     mirrorReceiptPath: confined(
       execution.runId,
-      join(runDirectory(execution.runId), "receipts", `${execution.node.id}-iteration-${String(execution.iteration).padStart(2, "0")}.json`),
+      join(
+        runDirectory(execution.runId),
+        "receipts",
+        `${execution.node.id}-iteration-${String(execution.iteration).padStart(2, "0")}-recovery-${String(execution.recoveryCycle).padStart(4, "0")}-${execution.receiptToken}.json`,
+      ),
     ),
   };
 }
@@ -98,7 +113,7 @@ async function writeJsonImmutably(path: string, value: unknown): Promise<void> {
 }
 
 export function buildCompletionReceipt(input: {
-  execution: AgentExecutionInputV2;
+  execution: AgentExecutionInput;
   promptSha256: string;
   outputSchemaSha256: string;
   output: JsonValue;
@@ -129,7 +144,7 @@ export function buildCompletionReceipt(input: {
 export function validateCompletionReceipt(
   receipt: AgentCompletionReceipt,
   expected: {
-    execution: AgentExecutionInputV2;
+    execution: AgentExecutionInput;
     promptSha256: string;
     outputSchemaSha256: string;
   },
@@ -158,7 +173,7 @@ export function validateCompletionReceipt(
 }
 
 export async function recoverCompletionReceipt(input: {
-  execution: AgentExecutionInputV2;
+  execution: AgentExecutionInput;
   promptSha256: string;
   outputSchemaSha256: string;
 }): Promise<AgentExecutionResult | undefined> {
@@ -176,7 +191,7 @@ export async function recoverCompletionReceipt(input: {
   const receipt = primary ?? mirror!;
   if (!primary) await writeJsonImmutably(paths.primaryReceiptPath, receipt);
   if (!mirror) await writeJsonImmutably(paths.mirrorReceiptPath, receipt);
-  await writeJsonArtifact(paths.outputPath, receipt.output);
+  await writeJsonArtifact(paths.acceptedOutputPath, receipt.output);
   if (paths.loopOutputPath) await writeJsonArtifact(paths.loopOutputPath, receipt.output);
   return {
     output: receipt.output,
@@ -187,7 +202,7 @@ export async function recoverCompletionReceipt(input: {
 }
 
 export async function commitCompletionReceipt(input: {
-  execution: AgentExecutionInputV2;
+  execution: AgentExecutionInput;
   promptSha256: string;
   outputSchemaSha256: string;
   output: JsonValue;
@@ -196,7 +211,6 @@ export async function commitCompletionReceipt(input: {
 }): Promise<AgentCompletionReceipt> {
   const paths = completionPaths(input.execution);
   await writeJsonArtifact(paths.outputPath, input.output);
-  if (paths.loopOutputPath) await writeJsonArtifact(paths.loopOutputPath, input.output);
   const receipt = buildCompletionReceipt({
     ...input,
     completedAt: new Date().toISOString(),
@@ -204,5 +218,7 @@ export async function commitCompletionReceipt(input: {
   await writeJsonImmutably(paths.primaryReceiptPath, receipt);
   await input.afterPrimary?.();
   await writeJsonImmutably(paths.mirrorReceiptPath, receipt);
+  await writeJsonArtifact(paths.acceptedOutputPath, input.output);
+  if (paths.loopOutputPath) await writeJsonArtifact(paths.loopOutputPath, input.output);
   return receipt;
 }

@@ -1,6 +1,6 @@
 # Steward production roadmap and release gates
 
-Status: implementation plan; no phase is marked complete by writing these documents. Date: 2026-09-05.
+Status: implementation plan; no phase is marked complete by writing these documents. Date: 2026-09-07.
 
 The [vision](vision.md) sets product scope, the [decision register](decisions.md) explains architectural choices, and the [technical design](technical-design.md) defines target behavior. The older CLI proposal supplies detailed UI/language examples; the sequence below replaces its packet order and single large MVP milestone.
 
@@ -12,17 +12,17 @@ Each phase produces a usable vertical slice and retained evidence. Owner labels 
 
 | Phase | Outcome and work | Exit evidence | Owner |
 |---|---|---|---|
-| P0 — protect the current runtime | Freeze legacy behavior/history fixtures. Diagnose and fix human/final artifact coverage, receipt recovery collisions, stale status, accidental keyboard starts, always-on HTTP control, and duplicate start behavior. Introduce safe versioned paths where legacy behavior cannot change in place. | Human output/final manifest verification; corrupt-receipt fresh recovery; lost-start-response deduplication; input typing causes zero starts; closed Temporal executions expose no live recovery controls; legacy replay passes. | Runtime + interface maintainers |
-| P1 — contracts and durable foundation | Publish contract fixtures, compiler for existing semantics, input/reference validation, separate semantic/provenance hashes, evidence/artifact interfaces, transactional local backend, common ControlPlane, V3 DAG execution, history bounds, attempt isolation and cancellation. | Both valid/invalid fixtures; stable hash tests; multi-process duplicate/late commit races; accepted-answer restart; history rollover; active-sibling cancellation; legacy and V3 replay. | Contracts + runtime + storage maintainers |
+| P0 — protect the current runtime | Harden the single current interpreter. Diagnose and fix human/final artifact coverage, receipt recovery collisions, stale status, accidental keyboard starts, always-on HTTP control, and duplicate start behavior. | Human output/final manifest verification; corrupt-receipt fresh recovery; lost-start-response deduplication; input typing causes zero starts; closed Temporal executions expose no live recovery controls. | Runtime + interface maintainers |
+| P1 — contracts and durable foundation | Publish contract fixtures, compiler for existing semantics, input/reference validation, separate semantic/provenance hashes, evidence/artifact interfaces, transactional local backend, common ControlPlane, bounded DAG execution, history bounds, attempt isolation and cancellation. | Both valid/invalid fixtures; stable hash tests; multi-process duplicate/late commit races; accepted-answer restart; history rollover; active-sibling cancellation; current-interpreter replay. | Contracts + runtime + storage maintainers |
 | P2 — installable developer preview | Emit distributable JavaScript, package schemas/assets, implement CLI/profiles/doctor/supervision, TUI for existing graph/loop/human semantics, optional safe dashboard, cursored events, and tutorial. | Install actual package in clean unrelated directories; validate/plan offline; run/detach/attach/answer/recover/cancel/status/export; compact TUI and browser checks; five-user pilot against vision measures. | Product interfaces + release owner |
 | P3 — production for one team | Add external production Temporal profile, PostgreSQL and object storage adapters, operator/service identity, session placement policy, retention/backups, observability, deployment and rollback automation. | Full production fault/restore matrix; two-worker concurrency; loss of a worker host; authenticated control/artifact access; measured operating targets; deployment canary and rollback. | Platform/operations + security + release owner |
-| P4 — richer workflow authoring | Add new nested group/parallel/multi-step-loop language, scope exports, migration tooling, and authoring skill. Keep existing human gates. Child workflows and richer approval syntax remain separate proposals. | Nested-scope semantic fixtures, bounded expansion, no partial fan-in, legacy equivalence where promised, renderer agreement, failure/continuation tests for nested scopes. | Language + runtime + interface maintainers |
+| P4 — richer workflow authoring | Add new nested group/parallel/multi-step-loop language, scope exports, migration tooling, and authoring skill. Keep existing human gates. Child workflows and richer approval syntax remain separate proposals. | Nested-scope semantic fixtures, bounded expansion, no partial fan-in, renderer agreement, failure/continuation tests for nested scopes. | Language + runtime + interface maintainers |
 
 P4 can be explored independently after P1 contracts settle, but is not a prerequisite for qualifying the existing workflow model. Multi-tenant hosting, writable executors, new provider integrations, and a marketplace need separate decisions and gates.
 
 ## First implementation slice
 
-Start with a human-input workflow and one simulated agent consuming its answer. Add a versioned shared commit path, a final result manifest, and reconciliation that distinguishes accepted output from Temporal completion. Prove worker restart after answer acceptance, projection deletion, and duplicate answer submission while preserving the existing workflow path for replay.
+Start with a human-input workflow and one simulated agent consuming its answer. Add a versioned shared commit path, a final result manifest, and reconciliation that distinguishes accepted output from Temporal completion. Prove worker restart after answer acceptance, projection deletion, and duplicate answer submission on the current Workflow type.
 
 Then address dispatch-scoped receipt storage and a lost-response start retry. These slices exercise the most important contracts before the package, TUI, or new language depends on them. Parallelize contract fixtures, interface regression tests, and storage contract tests only after their shared interfaces are fixed.
 
@@ -40,7 +40,7 @@ Then address dispatch-scoped receipt storage and a lost-response start retry. Th
 | Deleted projection / truncated export / disconnected SSE | Rebuild from retained evidence, explicit corruption/gap reporting, deterministic cursors, no invented result. |
 | Temporal closes before projection updates | Status reconciles to the closed lifecycle; no invalid live recovery controls or false success. |
 | History continuation with pending decisions | Stable logical run, preserved pending IDs and accepted refs, no unfinished handlers or repeated accepted work. |
-| Old histories on a release bundle | V1/V2 and supported V3 histories replay; pending legacy Activity contracts remain compatible. |
+| Current histories on a release bundle | Supported `stewardWorkflow` histories replay; after adoption, incompatible changes introduce and retain an explicit versioned bundle. |
 | Production worker-host loss | Accepted evidence survives; session availability is assessed explicitly; no claim of session portability without a passing adapter test. |
 | Production restore | Temporal lineage, SQL acceptance records, and object hashes agree before writes resume; restore time/loss meet the declared envelope. |
 | Unauthorized control / synthetic secret input | Denied commands cause no dispatch; credentials stay out of payloads, logs, transcripts, and exports. |

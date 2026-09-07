@@ -7,6 +7,7 @@ export const examples = {
   product: { workflow: "workflows/product-launch.yaml", input: "examples/product-input.json" },
   privacy: { workflow: "workflows/privacy-launch-with-questions.yaml", input: "examples/product-input.json" },
   file: { workflow: "workflows/file-prompt.yaml", input: "examples/product-input.json" },
+  queue: { workflow: "workflows/queued-fan-out.yaml", input: "examples/queued-fan-out-input.json" },
 } as const;
 
 export function exampleNamed(name: string) {
@@ -24,6 +25,9 @@ export async function validateExamples() {
       else if (Array.isArray(value)) value.forEach(visit);
       else if (value && typeof value === "object") Object.values(value).forEach(visit);
     };
-    for (const node of definition.nodes) visit(node.inputs);
+    for (const node of definition.nodes) {
+      visit(node.inputs);
+      if (node.for_each?.items.startsWith("$input")) visit(node.for_each.items);
+    }
   }
 }

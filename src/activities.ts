@@ -13,10 +13,10 @@ import {
 } from "./completion-receipt";
 import type {
   AgentExecutionInput,
-  AgentExecutionInputV2,
   AgentExecutionResult,
   AgentHeartbeatCheckpoint,
   JsonValue,
+  OutputType,
   TimelineEvent,
   TransitionInput,
 } from "./contracts";
@@ -57,12 +57,12 @@ export async function recordTransition(input: TransitionInput): Promise<Timeline
   return recordTransitionStore(input);
 }
 
-function cyclePrefix(execution: AgentExecutionInputV2): string {
+function cyclePrefix(execution: AgentExecutionInput): string {
   return `iteration:${execution.iteration}:recovery:${execution.recoveryCycle}`;
 }
 
 function transition(
-  execution: AgentExecutionInputV2,
+  execution: AgentExecutionInput,
   suffix: string,
   type: string,
   message: string,
@@ -83,7 +83,23 @@ function transition(
   };
 }
 
-function simulatedValue(type: string, nodeTitle: string, input: Record<string, JsonValue>): JsonValue {
+function completionTransition(execution: AgentExecutionInput): {
+  type: "node.completed" | "node.item_completed";
+  message: string;
+} {
+  if (!execution.queueItem) {
+    return {
+      type: "node.completed",
+      message: `${execution.node.title} committed iteration ${execution.iteration}`,
+    };
+  }
+  return {
+    type: "node.item_completed",
+    message: `${execution.node.title} committed queued item ${execution.queueItem.index + 1} of ${execution.queueItem.count}`,
+  };
+}
+
+function simulatedValue(type: OutputType, nodeTitle: string, input: Record<string, JsonValue>): JsonValue {
   switch (type) {
     case "string":
       return `${nodeTitle} produced a validated result from ${Object.keys(input).length} inputs.`;
@@ -97,12 +113,14 @@ function simulatedValue(type: string, nodeTitle: string, input: Record<string, J
       return [`${nodeTitle} signal A`, `${nodeTitle} signal B`];
     case "number[]":
       return [1, 2];
-    default:
-      return null;
+    case "boolean[]":
+      return [true, false];
+    case "object[]":
+      return [input];
   }
 }
 
-function simulatedOutput(execution: AgentExecutionInputV2): JsonValue {
+function simulatedOutput(execution: AgentExecutionInput): JsonValue {
   if (execution.node.demo_outputs?.length) {
     return execution.node.demo_outputs[Math.min(execution.iteration - 1, execution.node.demo_outputs.length - 1)];
   }
@@ -138,7 +156,7 @@ function terminateChild(child: ChildProcess): void {
 }
 
 async function runCodex(input: {
-  execution: AgentExecutionInputV2;
+  execution: AgentExecutionInput;
   prompt: string;
   schemaPath: string;
   outputPath: string;
@@ -256,10 +274,12 @@ function readableKeys(values: Record<string, unknown>): string {
   return `${keys.slice(0, -1).join(", ")} and ${keys.at(-1)}`;
 }
 
-function promptFor(execution: AgentExecutionInputV2): string {
+function promptFor(execution: AgentExecutionInput): string {
   return [
     `You are the bounded worker for workflow node ${execution.node.id} (${execution.node.title}).`,
-    `This is iteration ${execution.iteration}${execution.node.loop ? ` of at most ${execution.node.loop.max_iterations}` : ""}.`,
+    execution.queueItem
+      ? `This is queue item ${execution.queueItem.index + 1} of ${execution.queueItem.count}.`
+      : `This is iteration ${execution.iteration}${execution.node.loop ? ` of at most ${execution.node.loop.max_iterations}` : ""}.`,
     "Do not orchestrate other agents. Do not modify files. Complete only this node's assignment.",
     "Return only JSON matching the provided output schema.",
     ...(execution.recovery
@@ -283,7 +303,7 @@ function promptFor(execution: AgentExecutionInputV2): string {
 }
 
 function heartbeatCheckpoint(
-  execution: AgentExecutionInputV2,
+  execution: AgentExecutionInput,
   attempt: number,
   runtime: ActivityRuntime,
 ): AgentHeartbeatCheckpoint {
@@ -304,16 +324,8 @@ function heartbeatCheckpoint(
   };
 }
 
-function legacyExecution(execution: AgentExecutionInput): AgentExecutionInputV2 {
-  return {
-    ...execution,
-    recoveryCycle: 0,
-    receiptToken: `legacy-${execution.temporalRunId}-${execution.node.id}-${execution.iteration}`,
-  };
-}
-
 async function injectedNetworkFailure(
-  execution: AgentExecutionInputV2,
+  execution: AgentExecutionInput,
   attempt: number,
   runtime: ActivityRuntime,
   checkpoint: () => void,
@@ -331,7 +343,7 @@ async function injectedNetworkFailure(
   throw new Error("Injected network connection lost while the provider turn was active.");
 }
 
-async function pauseAfterPrimaryReceipt(execution: AgentExecutionInputV2, attempt: number): Promise<void> {
+async function pauseAfterPrimaryReceipt(execution: AgentExecutionInput, attempt: number): Promise<void> {
   if (
     process.env.YAMLFLOW_TEST_PAUSE_AFTER_RECEIPT_NODE !== execution.node.id
     || execution.recoveryCycle !== 0
@@ -340,7 +352,7 @@ async function pauseAfterPrimaryReceipt(execution: AgentExecutionInputV2, attemp
   await pause(Number(process.env.YAMLFLOW_TEST_PAUSE_AFTER_RECEIPT_MS ?? "30000"));
 }
 
-async function executeAgentInternal(execution: AgentExecutionInputV2): Promise<AgentExecutionResult> {
+async function executeAgentInternal(execution: AgentExecutionInput): Promise<AgentExecutionResult> {
   const context = Context.current();
   const attempt = context.info.attempt;
   const started = Date.now();
@@ -364,7 +376,9 @@ async function executeAgentInternal(execution: AgentExecutionInputV2): Promise<A
     providerSessionId: priorProviderSessionId,
   };
   if (execution.mode === "simulated") {
-    runtime.providerSessionId ??= `sim-${execution.runId}-${execution.node.id}`;
+    runtime.providerSessionId ??= execution.queueItem
+      ? `sim-${execution.runId}-${execution.node.id}-${execution.iteration}`
+      : `sim-${execution.runId}-${execution.node.id}`;
   }
   const checkpoint = (): void => context.heartbeat(heartbeatCheckpoint(execution, attempt, runtime));
 
@@ -385,6 +399,7 @@ async function executeAgentInternal(execution: AgentExecutionInputV2): Promise<A
         attempt,
         iteration: execution.iteration,
         recoveryCycle: execution.recoveryCycle,
+        ...(execution.queueItem ? { queueItem: execution.queueItem } : {}),
         input: execution.input,
         resumedProviderSession: Boolean(priorProviderSessionId),
         recoveredFromHeartbeat: Boolean(matchingCheckpoint?.providerSessionId),
@@ -424,22 +439,26 @@ async function executeAgentInternal(execution: AgentExecutionInputV2): Promise<A
           },
         ),
       );
+      const completed = completionTransition(execution);
       await recordTransitionStore(
         transition(
           execution,
           `attempt:${attempt}:completed`,
-          "node.completed",
-          `${execution.node.title} recommitted iteration ${execution.iteration} without rerunning the provider`,
+          completed.type,
+          execution.queueItem
+            ? `${completed.message} from its hash-bound receipt`
+            : `${execution.node.title} recommitted iteration ${execution.iteration} without rerunning the provider`,
           {
             attempt,
             iteration: execution.iteration,
             recoveryCycle: execution.recoveryCycle,
+            ...(execution.queueItem ? { queueItem: execution.queueItem } : {}),
             output: recovered.output,
             outputHash: sha256Json(recovered.output),
             receiptSha256: recovered.receiptSha256,
             recoveredFromReceipt: true,
             durationMs: Date.now() - started,
-            artifact: paths.outputPath.slice(runDirectory(execution.runId).length + 1),
+            artifact: paths.acceptedOutputPath.slice(runDirectory(execution.runId).length + 1),
           },
         ),
       );
@@ -510,22 +529,24 @@ async function executeAgentInternal(execution: AgentExecutionInputV2): Promise<A
       ...(runtime.providerSessionId ? { providerSessionId: runtime.providerSessionId } : {}),
       afterPrimary: () => pauseAfterPrimaryReceipt(execution, attempt),
     });
+    const completed = completionTransition(execution);
     await recordTransitionStore(
       transition(
         execution,
         `attempt:${attempt}:completed`,
-        "node.completed",
-        `${execution.node.title} committed iteration ${execution.iteration}`,
+        completed.type,
+        completed.message,
         {
           attempt,
           iteration: execution.iteration,
           recoveryCycle: execution.recoveryCycle,
+          ...(execution.queueItem ? { queueItem: execution.queueItem } : {}),
           output,
           outputHash: receipt.outputSha256,
           receiptSha256: receipt.receiptSha256,
           ...(runtime.providerSessionId ? { providerSessionId: runtime.providerSessionId } : {}),
           durationMs: Date.now() - started,
-          artifact: paths.outputPath.slice(runDirectory(execution.runId).length + 1),
+          artifact: paths.acceptedOutputPath.slice(runDirectory(execution.runId).length + 1),
         },
       ),
     );
@@ -563,11 +584,6 @@ async function executeAgentInternal(execution: AgentExecutionInputV2): Promise<A
   }
 }
 
-// V1 remains registered for replay compatibility. Its external result shape is unchanged.
-export async function executeAgent(execution: AgentExecutionInput): Promise<JsonValue> {
-  return (await executeAgentInternal(legacyExecution(execution))).output;
-}
-
-export async function executeAgentV2(execution: AgentExecutionInputV2): Promise<AgentExecutionResult> {
+export async function executeAgent(execution: AgentExecutionInput): Promise<AgentExecutionResult> {
   return executeAgentInternal(execution);
 }

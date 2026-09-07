@@ -196,14 +196,14 @@ async function handler(request: IncomingMessage, response: ServerResponse, autho
       return;
     }
     const state = (await listRunStates()).find((candidate) => candidate.runId === runId);
-    const pending = state && Object.values(state.nodes).find(
-      (node) => node.recovery?.requestId === requestId && node.recovery.status === "waiting",
-    );
+    const pending = state && Object.values(state.nodes)
+      .flatMap((node) => node.recoveryRequests ?? [])
+      .find((recovery) => recovery.requestId === requestId && recovery.status === "waiting");
     if (!state || !pending) {
       json(response, 409, { error: "The recovery request is not pending for this run" });
       return;
     }
-    if (action === "retry_same_session" && !pending.recovery?.canResumeSession) {
+    if (action === "retry_same_session" && !pending.canResumeSession) {
       json(response, 409, { error: "This recovery request has no safe provider session to resume" });
       return;
     }

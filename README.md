@@ -238,7 +238,29 @@ npm run start -- --workflow workflows/file-prompt.yaml --input examples/product-
 
 This command requires a running Temporal server and Steward worker, as with the other examples.
 
-All output fields are required. Supported types are `string`, `number`, `boolean`, `object`, `string[]`, and `number[]`. References may target `$input`, `$input.path`, `$nodes.<id>.output`, or `$nodes.<id>.output.path`.
+All output fields are required. Supported types are `string`, `number`, `boolean`, `object`, `string[]`, `number[]`, `boolean[]`, and `object[]`. References may target `$input`, `$input.path`, `$nodes.<id>.output`, or `$nodes.<id>.output.path`.
+
+An agent node can consume an array as a bounded queue with `for_each`:
+
+```yaml
+  review:
+    needs: [plan]
+    prompt: Review the one queued task supplied as task.
+    for_each:
+      items: $nodes.plan.output.tasks
+      as: task
+      max_parallelism: 2
+    outputs:
+      finding: string
+```
+
+`items` is an array reference, `as` injects one item into each worker's resolved inputs, and `max_parallelism` caps that node's simultaneous item workers. The global and group caps still apply, so the strictest applicable limit wins. Items are released in source order; the node commits only after every item succeeds, and its downstream output is an array of per-item output objects in the original source order. An empty source array commits `[]` without launching an agent. `for_each` cannot be combined with `loop` or `kind: human`.
+
+Try the [queued fan-out example](workflows/queued-fan-out.yaml):
+
+```bash
+npm run start -- --workflow workflows/queued-fan-out.yaml --input examples/queued-fan-out-input.json --mode simulated
+```
 
 Groups apply per-group parallelism limits while preserving the global cap. Loops are deliberately bounded to 20 iterations and support `equals`, `not_equals`, numeric comparisons, `contains`, and `truthy`. A downstream fan-in sees only the final accepted loop output.
 
@@ -250,4 +272,4 @@ Run `npm run verify` for typechecking and unit tests. `npm run verify:recovery` 
 
 The [CI workflow](.github/workflows/ci.yml) checks Node 22 and 24 and runs a separate simulated recovery job. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, ownership boundaries, and validation expectations. Runtime history, credentials, local agent configuration, and generated test output are excluded from Git.
 
-Steward was developed under the working name YAMLFlow. Existing `YAMLFLOW_*` settings, `yamlflow-` execution IDs, task queues, schemas, and supported Temporal workflow types retain their identifiers so saved runs remain addressable. The product rename does not migrate execution history.
+Steward was developed under the working name YAMLFlow, so some local configuration, execution IDs, task queues, and schema identifiers retain that spelling. All new definitions use the single `stewardWorkflow` Temporal type and `executeAgent` Activity. Pre-adoption `yamlAgentWorkflow*` histories and artifacts are preserved but are not registered or replayable by the current worker; see ADR-016.

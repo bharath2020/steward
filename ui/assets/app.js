@@ -408,6 +408,7 @@ function renderAuthoringNodeDetail(definition, nodeId) {
     ["Type", node.kind === "human" ? "Human input" : node.agent],
     ["Group", group?.title ?? "—"],
     ["Needs", node.needs.join(", ") || "start"],
+    ["Queue", node.for_each ? `${node.for_each.items} → ${node.for_each.as} · max ${node.for_each.max_parallelism}` : "—"],
   ].forEach(([key, value]) => {
     details.append(text(document.createElement("dt"), key), text(document.createElement("dd"), value));
   });
@@ -574,12 +575,13 @@ function renderInspector(snapshot) {
     return;
   }
   const state = run.nodes[node.id];
+  const pendingRecoveries = (state.recoveryRequests ?? []).filter((request) => request.status === "waiting");
   text(ui["inspector-title"], node.title);
   text(ui["inspector-status"], state.status);
   const details = document.createElement("dl");
   details.className = "inspect-grid";
   const group = definition.groups.find((item) => item.id === node.group);
-  [["Node", node.id], ["Group", group?.title ?? "—"], ["Configured", node.kind === "human" ? "human input" : node.agent], ["Executing", state.agent], ["Needs", node.needs.join(", ") || "start"], ["Attempt", state.attempt ?? "—"], ["Recovery", state.recovery?.recoveryCycle ?? "—"], ["Iteration", node.loop ? `${state.iteration ?? 0} / ${node.loop.max_iterations}` : "—"], ["Duration", state.durationMs ? `${(state.durationMs / 1000).toFixed(1)}s` : "—"]].forEach(([key, value]) => {
+  [["Node", node.id], ["Group", group?.title ?? "—"], ["Configured", node.kind === "human" ? "human input" : node.agent], ["Executing", state.agent], ["Needs", node.needs.join(", ") || "start"], ["Attempt", state.attempt ?? "—"], ["Recovery", pendingRecoveries.length || "—"], ["Iteration", node.loop ? `${state.iteration ?? 0} / ${node.loop.max_iterations}` : "—"], ["Queue", node.for_each ? `${state.completedItems ?? 0} / ${state.totalItems ?? "?"} · max ${node.for_each.max_parallelism}` : "—"], ["Duration", state.durationMs ? `${(state.durationMs / 1000).toFixed(1)}s` : "—"]].forEach(([key, value]) => {
     details.append(text(document.createElement("dt"), key), text(document.createElement("dd"), value));
   });
   const prompt = text(document.createElement("p"), node.prompt);
@@ -588,9 +590,8 @@ function renderInspector(snapshot) {
   const messages = snapshot.agentMessages?.[node.id] ?? [];
   ui["inspector-content"].append(
     section("Execution", details),
-    ...(state.status === "awaiting_recovery" && state.recovery
-      ? [section("Recovery", recoveryPanel(state.recovery))]
-      : []),
+    ...pendingRecoveries.map((recovery, index) =>
+      section(pendingRecoveries.length === 1 ? "Recovery" : `Recovery ${index + 1}`, recoveryPanel(recovery))),
     ...(state.status === "awaiting_input" && state.humanRequest
       ? [section("Your input", humanInputPanel(run.runId, state.humanRequest))]
       : []),
@@ -602,6 +603,11 @@ function renderInspector(snapshot) {
       ["until", `${node.loop.until.path} ${node.loop.until.operator} ${String(node.loop.until.value ?? "")}`],
       ["carry as", node.loop.carry_as],
       ["exhaustion", node.loop.on_exhaustion],
+    ], "binding-list"))] : []),
+    ...(node.for_each ? [section("Queue", keyValueList([
+      ["items", node.for_each.items],
+      ["item as", node.for_each.as],
+      ["max parallelism", node.for_each.max_parallelism],
     ], "binding-list"))] : []),
     section("Resolved input", jsonBlock(state.input)),
     section("Committed output", jsonBlock(state.output, true)),

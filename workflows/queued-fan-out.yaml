@@ -1,0 +1,54 @@
+version: 1
+name: Queued fan-out
+description: Split a topic into tasks, process the array through a bounded agent queue, then join the ordered results.
+
+defaults:
+  provider: simulated
+  max_parallelism: 4
+  retry:
+    maximum_attempts: 2
+  delay_ms: 300
+
+nodes:
+  plan:
+    title: Plan tasks
+    prompt: Split the topic into four independently reviewable tasks.
+    inputs:
+      topic: $input.topic
+    outputs:
+      tasks: object[]
+    demo_output:
+      tasks:
+        - { id: accessibility, focus: Keyboard and screen reader behavior }
+        - { id: performance, focus: Rendering and loading performance }
+        - { id: resilience, focus: Failure and recovery behavior }
+        - { id: security, focus: Trust boundaries and input handling }
+
+  review:
+    title: Review task
+    needs: [plan]
+    prompt: Review the one queued task supplied as task. Return one concise finding.
+    for_each:
+      items: $nodes.plan.output.tasks
+      as: task
+      max_parallelism: 2
+    inputs:
+      topic: $input.topic
+    outputs:
+      finding: string
+    demo_outputs:
+      - { finding: Accessibility review complete. }
+      - { finding: Performance review complete. }
+      - { finding: Resilience review complete. }
+      - { finding: Security review complete. }
+
+  summarize:
+    title: Summarize reviews
+    needs: [review]
+    prompt: Synthesize the ordered review results into a concise summary.
+    inputs:
+      reviews: $nodes.review.output
+    outputs:
+      summary: string
+    demo_output:
+      summary: Four bounded reviews completed and joined in source order.

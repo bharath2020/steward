@@ -137,7 +137,7 @@ test("explicit absolute prompt paths are supported", async (t) => {
   assert.equal((await loadWorkflow(paths.workflow)).nodes[0].prompt, "Absolute");
 });
 
-test("legacy inline-only definition hash remains unchanged", async () => {
+test("inline-only definition hash remains stable", async () => {
   const definition = await loadWorkflow("workflows/product-launch.yaml");
   assert.equal(definition.definitionHash, "adf3039fd7abe7c07cbea9ed3963787aea48ee04e2d0ab7852304ad1d8ec6858");
   assert.ok(definition.nodes.every((node) => !Object.hasOwn(node, "promptSource")));

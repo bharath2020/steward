@@ -28,7 +28,7 @@ The owner approved commit and push. After verifying the authenticated GitHub acc
 
 The approved display name, package metadata, README icon/badges, repository description, and topics are configured. Preserve execution identifiers and keep runtime history, credentials, local configuration, and generated test output excluded from future commits. No license has been selected; do not add an open-source license or license badge without the owner's choice.
 
-Compatibility is explicit: `YAMLFLOW_*` settings, `yamlflow-<runId>` workflow IDs, the `yamlflow-agent-nodes` task queue, `yamlAgentWorkflow`/`yamlAgentWorkflowV2` workflow types, and stored schema identities retain their established spelling. Existing lowercase identifiers in future CLI proposals also remain unchanged pending a contract-specific decision.
+Some pre-adoption local identifiers retain the YAMLFlow working-name spelling, but the worker registers only the current `stewardWorkflow` type and `executeAgent` Activity. Removed `yamlAgentWorkflow*` histories remain stored and require their matching historical bundle to resume; setup does not migrate or delete them. See ADR-016.
 
 Validation of the current local component/UI change is recorded in [the validation report](validation/component-ui-2026-09-05.md). Relocation verification matched all 888 runtime files (10,632,065 bytes) by relative path, byte count, and SHA-256 before and after the move. The detailed local manifest is `/private/tmp/steward-relocation-20260905.json`; it is excluded from publication.
 

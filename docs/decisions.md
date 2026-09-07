@@ -20,6 +20,8 @@ This register records choices made for the production direction. It does not ass
 | ADR-012 | Local macOS bootstrap and detached example supervisor | Current one-click setup |
 | ADR-013 | Agent-assisted V1 authoring is validated preview data, not execution authority | Current Console builder |
 | ADR-014 | Draft export requires an explicit browser download gesture | Current Console builder |
+| ADR-015 | Explicit bounded array fan-out | Current runtime |
+| ADR-016 | Pre-adoption runtime has one current interpreter and no compatibility shims | Current runtime |
 
 ## ADR-001 — CLI first with one control service
 
@@ -192,3 +194,27 @@ Authoring providers run as local subprocesses with non-interactive, no-write per
 **Decision.** Supersede only ADR-013's blanket no-file-write wording for an explicit Export YAML browser action. Keep export disabled until the existing parser accepts a draft. On a user click, download the exact accepted YAML bytes through the browser with a portable filename derived from the workflow name. Do not add a server write endpoint, choose a repository path, start a run, or export an invalid/in-flight response.
 
 **Consequences.** The browser and operator own the download destination and confirmation behavior. Exported YAML is an author-controlled source file, not durable execution evidence or proof that a run started. Draft chat and YAML remain session-only until the explicit gesture, and later save/start commands still require separate contracts and authorization.
+
+## ADR-015 — Explicit bounded array fan-out in V1
+
+**Status.** Its fan-out semantics remain adopted; its compatibility strategy is superseded by ADR-016.
+
+**Context.** Authors can already declare array-valued outputs, but turning an array into one agent invocation per item requires manually authored static nodes. Inferring fan-out from any array binding would make provider count and graph expansion implicit. The requested use case is a source-ordered queue with an explicit maximum number of simultaneous agents.
+
+**Decision.** Extend V1 agent nodes with `for_each: { items, as, max_parallelism }`. `items` is one `$input` or declared dependency-output array reference, `as` is the resolved-input key for one item, and `max_parallelism` is a positive node-local cap that defaults to the workflow cap. The interpreter expands the array only after dependencies commit, drains source-ordered work while enforcing the workflow, group, and node-local caps together, and aggregates per-item object outputs in source order. An empty array commits `[]` without provider execution. `for_each` is unavailable on human nodes and cannot be combined with `loop`.
+
+Each item uses its one-based source position as the existing execution iteration identity, with an item-specific provider session, recovery request, receipt, and artifact directory. Per-item completion is evidence, but the mapped node releases dependents only after every item succeeds and the interpreter records the ordered aggregate. A failed item fails the mapped node after already committed siblings finish; accepted siblings remain recoverable evidence.
+
+This is an explicitly documented compatible extension under ADR-002, not the nested V2 language proposed in the CLI specification. Existing definitions have no `for_each`, retain their definition hashes, and follow the unchanged Workflow command path. New definitions use the distinct `yamlAgentWorkflowV2ForEach` type so a stale worker that knows only ordinary V2 semantics cannot accept and misinterpret them. The legacy `yamlAgentWorkflow` and ordinary `yamlAgentWorkflowV2` identities remain available for old histories. The richer compiled-plan map/foreach design remains future work.
+
+**Consequences.** Add `boolean[]` and `object[]` to the existing output shorthand so practical task arrays can be declared. The current runtime still embeds expanded item values and aggregate outputs in Temporal history and remains subject to the local durability and history-size gaps in this document. Validation must cover source typing, declared dependency edges, cap composition, stable result ordering, empty arrays, item failure/recovery, and unchanged non-`for_each` behavior before making a broader release claim. Current bounded evidence and its explicit gaps are recorded in [the queued fan-out validation note](validation/queued-fan-out-2026-09-07.md).
+
+## ADR-016 — One pre-adoption interpreter without compatibility shims
+
+**Context.** Steward has not been adopted externally, so retaining three Workflow type names, two Activity input types, and scheduler compatibility branches adds maintenance and replay constraints without protecting a supported consumer. The repository maintainer explicitly chose a clean replacement before adoption.
+
+**Decision.** The current authored contract remains `version: 1`, but all definitions execute through one Temporal Workflow type, `stewardWorkflow`, one `AgentExecutionInput`, one `executeAgent` Activity, and one rolling scheduler for ordinary and `for_each` work. Remove `yamlAgentWorkflow`, `yamlAgentWorkflowV2`, `yamlAgentWorkflowV2ForEach`, their wrappers, and the ordinary-node compatibility branch. Persisted databases, run directories, and historical provenance remain untouched, but executions started under removed Workflow types are no longer supported or replayable by the current worker. The new type name also prevents an older worker bundle from accepting new work.
+
+This supersedes the compatibility and retained-interpreter portions of ADR-002, ADR-007, ADR-009, ADR-010, and ADR-015. Their language validation, durability, evidence, ownership, and bounded-history requirements remain in force. Once Steward is adopted, incompatible changes require a versioned migration decision and replay evidence.
+
+**Consequences.** Current code and tests have one execution path. Operators may inspect preserved artifacts from pre-adoption runs, but must not present an open removed-type execution as resumable. Rollback means running a matching historical bundle against preserved state, not adding compatibility shims back to the current bundle or deleting runtime data.

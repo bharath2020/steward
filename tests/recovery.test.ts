@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildCompletionReceipt, validateCompletionReceipt } from "../src/completion-receipt";
-import type { AgentExecutionInputV2, WorkflowDefinition } from "../src/contracts";
+import { buildCompletionReceipt, completionPaths, validateCompletionReceipt } from "../src/completion-receipt";
+import type { AgentExecutionInput, WorkflowDefinition } from "../src/contracts";
 import {
   classifyAgentFailure,
   codexExecutionArgs,
@@ -19,7 +19,7 @@ const definition: WorkflowDefinition = {
   nodes: [],
 };
 
-const execution: AgentExecutionInputV2 = {
+const execution: AgentExecutionInput = {
   runId: "run-1",
   temporalRunId: "temporal-run-1",
   definition,
@@ -110,4 +110,40 @@ test("completion receipts reject altered identity, output, and dispatch tokens",
     () => validateCompletionReceipt({ ...receipt, output: { value: "forged" } }, expected),
     /output hash/,
   );
+});
+
+test("queued items receive distinct durable artifact and receipt paths", () => {
+  const queuedNode = {
+    ...execution.node,
+    for_each: { items: "$input.tasks", as: "task", max_parallelism: 2 },
+  };
+  const first = completionPaths({
+    ...execution,
+    node: queuedNode,
+    queueItem: { index: 0, count: 2 },
+  });
+  const second = completionPaths({
+    ...execution,
+    node: queuedNode,
+    iteration: 2,
+    queueItem: { index: 1, count: 2 },
+  });
+  assert.match(first.outputPath, /nodes\/worker\/items\/0001\/dispatches\/recovery-0000-unpredictable-dispatch-token\/output\.json$/);
+  assert.match(second.outputPath, /nodes\/worker\/items\/0002\/dispatches\/recovery-0000-unpredictable-dispatch-token\/output\.json$/);
+  assert.match(first.acceptedOutputPath, /nodes\/worker\/items\/0001\/output\.json$/);
+  assert.match(second.acceptedOutputPath, /nodes\/worker\/items\/0002\/output\.json$/);
+  assert.notEqual(first.primaryReceiptPath, second.primaryReceiptPath);
+  assert.notEqual(first.mirrorReceiptPath, second.mirrorReceiptPath);
+
+  const recoveredFresh = completionPaths({
+    ...execution,
+    node: queuedNode,
+    queueItem: { index: 0, count: 2 },
+    recoveryCycle: 1,
+    receiptToken: "fresh-token",
+  });
+  assert.notEqual(first.directory, recoveredFresh.directory);
+  assert.notEqual(first.primaryReceiptPath, recoveredFresh.primaryReceiptPath);
+  assert.notEqual(first.mirrorReceiptPath, recoveredFresh.mirrorReceiptPath);
+  assert.equal(first.acceptedOutputPath, recoveredFresh.acceptedOutputPath);
 });

@@ -3,7 +3,15 @@ export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue
 
 export type AgentProvider = "simulated" | "codex";
 export type NodeKind = "agent" | "human";
-export type OutputType = "string" | "number" | "boolean" | "object" | "string[]" | "number[]";
+export type OutputType =
+  | "string"
+  | "number"
+  | "boolean"
+  | "object"
+  | "string[]"
+  | "number[]"
+  | "boolean[]"
+  | "object[]";
 export type LoopOperator =
   | "equals"
   | "not_equals"
@@ -30,6 +38,12 @@ export interface NodeLoop {
     operator: LoopOperator;
     value?: JsonValue;
   };
+}
+
+export interface NodeForEach {
+  items: string;
+  as: string;
+  max_parallelism: number;
 }
 
 export interface RetryPolicy {
@@ -60,6 +74,7 @@ export interface WorkflowNode {
   demo_outputs?: JsonValue[];
   delay_ms?: number;
   loop?: NodeLoop;
+  for_each?: NodeForEach;
 }
 
 export interface JsonSchema {
@@ -194,11 +209,13 @@ export interface NodeRunState {
   attempt?: number;
   iteration?: number;
   iterationCount?: number;
+  completedItems?: number;
+  totalItems?: number;
   durationMs?: number;
   input?: JsonValue;
   output?: JsonValue;
   error?: string;
-  recovery?: AgentRecoveryRequest;
+  recoveryRequests?: AgentRecoveryRequest[];
   humanRequest?: HumanInputRequest;
 }
 
@@ -245,9 +262,10 @@ export interface AgentExecutionInput {
   delayMs?: number;
   wave: number;
   iteration: number;
-}
-
-export interface AgentExecutionInputV2 extends AgentExecutionInput {
+  queueItem?: {
+    index: number;
+    count: number;
+  };
   recoveryCycle: number;
   receiptToken: string;
   providerSessionId?: string;

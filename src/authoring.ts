@@ -99,9 +99,10 @@ Language contract:
 - Top level requires: version: 1, name, and a non-empty nodes mapping. Optional: description, defaults, groups.
 - defaults.provider is simulated or codex. defaults.max_parallelism is a positive integer. defaults.retry.maximum_attempts is 1 through 5. defaults.delay_ms is non-negative.
 - Node IDs use lowercase letters, numbers, hyphen, or underscore and start with a letter.
-- Agent nodes require inline prompt and a non-empty outputs mapping. Supported output types: string, number, boolean, object, string[], number[].
-- Agent nodes may include title, group, needs, inputs, agent (simulated or codex), delay_ms, demo_output, demo_outputs, and loop.
-- Human nodes use kind: human, require question, may use needs/group/title, and must omit prompt, inputs, outputs, prompt_file, and loop.
+- Agent nodes require inline prompt and a non-empty outputs mapping. Supported output types: string, number, boolean, object, string[], number[], boolean[], object[].
+- Agent nodes may include title, group, needs, inputs, agent (simulated or codex), delay_ms, demo_output, demo_outputs, loop, and for_each.
+- for_each consumes an array reference with items, injects each item under the identifier in as, and accepts a positive max_parallelism. It cannot be combined with loop or a human node. Its aggregate output is the source-ordered array of per-item output objects.
+- Human nodes use kind: human, require question, may use needs/group/title, and must omit prompt, inputs, outputs, prompt_file, loop, and for_each.
 - Any downstream node that depends on a human node must bind $nodes.human_node_id.output.answer in inputs so the decision affects its work.
 - needs references existing nodes and the graph must be acyclic. A fan-in node lists every dependency in needs.
 - Input bindings use $input.field or $nodes.node_id.output.field. Every $nodes reference must also appear in needs.

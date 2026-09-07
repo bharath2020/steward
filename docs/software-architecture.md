@@ -1,12 +1,12 @@
 # Steward software architecture and responsibilities
 
-Status: adopted module design for implementation; most directories and interfaces remain targets. Date: 2026-09-05. Decisions: [ADR-009](decisions.md#adr-009--explicit-module-ownership-and-inward-dependencies), refining ADR-001 through ADR-007, and [ADR-010](decisions.md#adr-010--one-repository-with-cli-server-and-ui-template-boundaries) for the current CLI/server/UI component extraction.
+Status: adopted module design for implementation; most directories and interfaces remain targets. Date: 2026-09-07. Decisions: [ADR-009](decisions.md#adr-009--explicit-module-ownership-and-inward-dependencies), [ADR-010](decisions.md#adr-010--one-repository-with-cli-server-and-ui-template-boundaries), and [ADR-016](decisions.md#adr-016--one-pre-adoption-interpreter-without-compatibility-shims).
 
 The user outcome is a workflow system whose behavior can change without duplicating orchestration, weakening evidence, or coupling execution to its interface. This document owns **where code belongs, who owns each decision, and which dependencies are allowed**. The [technical design](technical-design.md) owns runtime semantics; the [roadmap](production-roadmap.md) owns delivery and qualification; [current architecture](architecture.md) describes today's code.
 
 Use one TypeScript package with explicit modules. Run the client, worker, optional dashboard, and projection publisher as independently supervised roles. A module is a code boundary, not a requirement for a separate server.
 
-The current implementation has Steward CLI modules in `src/cli/`, Steward Server HTTP and template adapters in `src/server/`, agent-assisted V1 draft mediation in `src/authoring.ts`, and Steward Console browser code/templates in `ui/`. Root compatibility entrypoints preserve existing npm commands. The authoring mediator returns only parser-accepted preview data and cannot start a run. The Temporal worker and flat legacy runtime modules remain in place. This establishes presentation and entrypoint boundaries; it does not establish the target control, execution, commit, store, or projection interfaces below. Approved display branding preserves existing `YAMLFLOW_*` settings and lowercase runtime/schema identities, as recorded in ADR-010 and ADR-013.
+The current implementation has Steward CLI modules in `src/cli/`, Steward Server HTTP and template adapters in `src/server/`, agent-assisted `version: 1` draft mediation in `src/authoring.ts`, and Steward Console browser code/templates in `ui/`. Root entrypoints preserve existing npm commands. The authoring mediator returns only parser-accepted preview data and cannot start a run. The Temporal worker exposes one current interpreter and Activity contract under ADR-016. This establishes presentation and entrypoint boundaries; it does not establish the target control, execution, commit, store, or projection interfaces below.
 
 ## Responsibility overview
 
@@ -54,7 +54,7 @@ Each module exposes a small public entry point. Internal files are private to th
 | Target path | Owns | Boundary |
 |---|---|---|
 | `src/domain/` | Versioned plan/run/step/command/evidence types; pure identity, binding-path and loop rules; type-only ports. `schemas/` holds published wire schemas with parity checks. | No filesystem, environment, network, provider, database, UI, or Temporal runtime imports. Shared rules used by an interpreter are pinned/versioned with that interpreter. |
-| `src/spec/` | YAML AST parsing, structural schemas, source locations, legacy V1 adaptation, unknown-field diagnostics. | Accepts source text and immutable inputs. It does not read files, discover profiles, or decide when nodes run. |
+| `src/spec/` | YAML AST parsing, structural schemas, source locations, and unknown-field diagnostics. | Accepts source text and immutable inputs. It does not read files, discover profiles, or decide when nodes run. |
 | `src/compiler/` | Semantic dependency/scope/reference checks, default expansion, limit checks, stable ordering, portable plan and semantic identity. | Receives capability descriptors as values. No executable probes, remote schema fetching, credential resolution, or Temporal connection. |
 | `src/policy/` | Pure command authorization and capability intersection; explicit allowed/denied decisions and reasons. | Does not grant permissions from model output, fetch secrets, or claim a sandbox restriction was enforced. |
 | `src/control/` | `ControlPlane` facade over start/observe/command/export use cases; `RuntimeManager` for service commands. Run manifests, durable command intent, source loading through a port, status reconciliation, export selection. | No subprocess provider execution, graph scheduling, or accepted step-output writes. May write command intent and immutable run inputs through ports. |
@@ -66,7 +66,7 @@ Each module exposes a small public entry point. Internal files are private to th
 | `src/executors/` | Built-in registry and provider adapters. Codex argument/protocol handling, session access, provider-error normalization, process tree cleanup, and policy enforcement. | Returns candidate output, session/checkpoint observations and normalized messages. No SQL commits, graph writes, or operator-command acceptance. Session/attempt files are private working data. |
 | `src/store/` | Evidence, artifact, projection, source-loading, and checkpoint I/O implementations; schema migrations and transactional constraints. Projection publisher/rebuild jobs. | Enforces persistence invariants. Does not interpret YAML, grant authority, evaluate loop predicates, or schedule execution. |
 | `src/presentation/` | Pure shared topology, status, loop-label and action view models from reconciled snapshots and capability descriptors. | No loop predicate evaluation or success inference from provider text. UI action visibility is advisory; commands are authorized again on submission. |
-| `src/cli/`, `src/tui/`, `src/server/`, `ui/` | Argument/HTTP decoding, transport authentication, keyboard/browser interaction, rendering, output formats, and connection/cursor state. `src/server/` is the web adapter path selected by ADR-010. | Target dependencies are application interfaces and shared presentation, without raw store access, Temporal SDK handles, or duplicated scheduling/recovery rules. Current CLI/server direct client and store calls remain explicit legacy exceptions until those services are extracted. |
+| `src/cli/`, `src/tui/`, `src/server/`, `ui/` | Argument/HTTP decoding, transport authentication, keyboard/browser interaction, rendering, output formats, and connection/cursor state. `src/server/` is the web adapter path selected by ADR-010. | Target dependencies are application interfaces and shared presentation, without raw store access, Temporal SDK handles, or duplicated scheduling/recovery rules. Current CLI/server direct client and store calls remain transitional exceptions until those services are extracted. |
 | `src/runtime/lifecycle/` | `RuntimeSupervisor` adapter: identity-checked local service start/stop, locks, probes, ownership, shutdown and log rotation. | Never starts a workflow. Remote profiles cannot start/stop infrastructure. Readiness reports are evidence, not a run-success verdict. |
 | `src/bootstrap/` | Entry points, configuration precedence, profile validation, adapter selection, credentials-provider wiring, worker bundle registration and shutdown wiring. | Sole composition root importing concrete implementations across modules. Business decisions stay in the owning service. |
 
@@ -199,15 +199,15 @@ Separate pure utilities from I/O adapters even when they share a directory. Avoi
 
 ## Current code to target ownership
 
-This is an extraction map, not an instruction to move legacy code in place. Preserve old Workflow/Activity exports and their helper behavior for supported histories.
+This is an extraction map for the single current runtime, not an instruction to add compatibility shims for pre-adoption histories.
 
 | Current files/functions | Target owner |
 |---|---|
 | `src/contracts.ts` | Domain types and versioned wire/port contracts. |
 | `src/definition.ts`: parsing, normalization, graph/schema checks | Spec + compiler; `loadWorkflow`/`loadInitialInput` I/O moves behind WorkflowSource. |
-| `src/resolver.ts`, `src/loop.ts` | Pure binding/loop rules; compiler validates paths, execution materializes referenced data, interpreter evaluates bounded loop operands. Preserve legacy versions. |
-| `src/workflows.ts`: ready batches, loops, human/recovery handlers | Legacy interpreters remain pinned; new scheduling and handlers live in the V3 Workflow module. |
-| `src/activities.ts`: `executeAgentV2`, prompt construction, heartbeat | Execution service + thin Activity identity/heartbeat/failure adapter. |
+| `src/resolver.ts`, `src/loop.ts` | Pure binding/loop rules; compiler validates paths, execution materializes referenced data, interpreter evaluates bounded loop operands. |
+| `src/workflows.ts`: rolling queue, loops, human/recovery handlers | Current deterministic interpreter; future incompatible scheduling moves behind a versioned Workflow type after adoption. |
+| `src/activities.ts`: `executeAgent`, prompt construction, heartbeat | Execution service + thin Activity identity/heartbeat/failure adapter. |
 | `src/activities.ts`: `runCodex`, child cleanup, simulated output | Codex and simulated executor adapters. |
 | `src/completion-receipt.ts`: build/validate/recover/commit and filesystem helpers | Pure identity/integrity rules + CommitService + ArtifactStore; separate semantics from path/link/write operations. |
 | `src/execution-policy.ts`: failure parsing, Codex args, checkpoints, limits | Executor protocol adapter, Activity bridge, pure domain checkpoint matching, and policy/limit configuration respectively. |
@@ -222,16 +222,16 @@ This is an extraction map, not an instruction to move legacy code in place. Pres
 | `src/cli/launcher.ts`; root `src/launcher.ts` wrapper; `src/config.ts`, `src/worker.ts` | RuntimeManager + lifecycle adapter + bootstrap/config and worker entrypoint. The launcher still hardcodes its database/log paths despite the store's runtime-directory override. |
 | `scripts/recovery-check.ts`, existing tests | Release/integration harness and owner-specific unit/contract fixtures. |
 
-One verified example of why this split matters: `ui/assets/app.js` currently re-evaluates loop predicates but does not handle `contains` or `truthy`, which `src/loop.ts` supports. Target snapshots carry the interpreter's outcome so web and TUI cannot disagree by implementing different predicates. The component/template extraction preserves this legacy behavior; it does not fix that gap.
+One verified example of why this split matters: `ui/assets/app.js` currently re-evaluates loop predicates but does not handle `contains` or `truthy`, which `src/loop.ts` supports. Target snapshots carry the interpreter's outcome so web and TUI cannot disagree by implementing different predicates. The component/template extraction preserves this current behavior; it does not fix that gap.
 
 UI templates share a single application behavior layer. The server accepts only known component tokens and public asset paths; layouts and themes do not select another interpreter or provider. Keep appearance choices in browser preferences and branding in `ui/brand.json`. A future template must preserve mount points and operator drafts and must not duplicate command submission or infer a different run status.
 
 ## Enforcement and implementation order
 
-At the P1 contract slice, add import-boundary checks for the new module roots, a Workflow bundle import check, public schema/TypeScript parity checks, and small contract suites for each port. Keep a narrow, documented legacy exception set with no new callers; do not weaken the new rules to accommodate the old flat layout.
+At the P1 contract slice, add import-boundary checks for the new module roots, a Workflow bundle import check, public schema/TypeScript parity checks, and small contract suites for each port. Keep a narrow, documented transitional exception set with no new callers; do not weaken the new rules to accommodate the old flat layout.
 
 Behavioral checks follow ownership: compiler golden plans/diagnostics; policy deny/capability fixtures; control lost-response command tests; interpreter replay/readiness/loop fixtures; execution heartbeat/cancel/capacity tests; executor protocol fixtures; commit corruption/fence/race tests; store backend contract tests; projection rebuild/cursor tests; presentation fixtures for every loop outcome and counter. A folder move alone is not evidence of separation.
 
-Implement the roadmap's human-answer-to-agent slice through these interfaces first. Freeze its contracts before parallel work. Then extract executor protocol and commit/storage behavior, introduce V3 scheduling, and connect CLI/web/TUI to the common read/control contracts. P0 fixes may remain narrowly in current files where replay-safe; this target layout must not delay them.
+Implement the roadmap's human-answer-to-agent slice through these interfaces first. Freeze its contracts before parallel work. Then extract executor protocol and commit/storage behavior, version scheduling only when an incompatible post-adoption change requires it, and connect CLI/web/TUI to the common read/control contracts. P0 fixes may remain narrowly in current files; this target layout must not delay them.
 
 For each substantive change, name the owning module and applicable ADR, identify the public contract affected, and verify no forbidden dependency was introduced. Add a module only when it owns a distinct decision or replaceable external boundary; do not split every function into its own service.

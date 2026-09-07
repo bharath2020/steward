@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import YAML from "yaml";
+import { Client, Connection } from "@temporalio/client";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import type {
   AgentCompletionReceipt,
@@ -79,11 +80,27 @@ async function readEvents(runtime: string, runId: string): Promise<TimelineEvent
   return source.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line) as TimelineEvent);
 }
 
-async function startRun(environment: NodeJS.ProcessEnv, delayMs = 60, workflowPath = "workflows/product-launch.yaml"): Promise<string> {
+async function firstDispatchReceipt(nodeDirectory: string): Promise<{ path: string; receipt: AgentCompletionReceipt } | undefined> {
+  const dispatchRoot = join(nodeDirectory, "dispatches");
+  const entries = await readdir(dispatchRoot).catch(() => []);
+  for (const entry of entries.sort()) {
+    const path = join(dispatchRoot, entry, "completion-receipt.json");
+    const receipt = await readJson<AgentCompletionReceipt>(path);
+    if (receipt) return { path, receipt };
+  }
+  return undefined;
+}
+
+async function startRun(
+  environment: NodeJS.ProcessEnv,
+  delayMs = 60,
+  workflowPath = "workflows/product-launch.yaml",
+  inputPath = "examples/product-input.json",
+): Promise<string> {
   const { stdout } = await execute(process.execPath, [
     "--import", "tsx", "src/start.ts",
     "--workflow", workflowPath,
-    "--input", "examples/product-input.json",
+    "--input", inputPath,
     "--mode", "simulated",
     "--delay-ms", String(delayMs),
   ], { cwd: process.cwd(), env: environment, maxBuffer: 1024 * 1024 });
@@ -94,6 +111,9 @@ async function startRun(environment: NodeJS.ProcessEnv, delayMs = 60, workflowPa
 
 async function main(): Promise<void> {
   const temporary = await mkdtemp(join(tmpdir(), "yamlflow-recovery-"));
+  const evidenceDirectory = process.env.STEWARD_RECOVERY_EVIDENCE_DIR
+    ? resolve(process.env.STEWARD_RECOVERY_EVIDENCE_DIR)
+    : undefined;
   const port = await freePort();
   const dashboardPort = await freePort();
   const address = `127.0.0.1:${port}`;
@@ -134,12 +154,17 @@ async function main(): Promise<void> {
       YAMLFLOW_TEST_PAUSE_AFTER_RECEIPT_MS: "30000",
     });
     const receiptRun = join(temporary, "runs", receiptRunId);
-    const primaryReceiptPath = join(receiptRun, "nodes", "intake", "completion-receipt.json");
-    const mirrorReceiptPath = join(receiptRun, "receipts", "intake-iteration-01.json");
+    const intakeDirectory = join(receiptRun, "nodes", "intake");
     const outputPath = join(receiptRun, "nodes", "intake", "output.json");
-    const primaryReceipt = await waitFor(
-      () => readJson<AgentCompletionReceipt>(primaryReceiptPath),
+    const primary = await waitFor(
+      () => firstDispatchReceipt(intakeDirectory),
       "primary completion receipt before worker loss",
+    );
+    const primaryReceipt = primary.receipt;
+    const mirrorReceiptPath = join(
+      receiptRun,
+      "receipts",
+      `intake-iteration-01-recovery-0000-${primaryReceipt.receiptToken}.json`,
     );
 
     await stop(worker, "SIGKILL");
@@ -160,7 +185,7 @@ async function main(): Promise<void> {
       path: "./intake.md",
       sha256: createHash("sha256").update(originalPrompt).digest("hex"),
     });
-    const persistedPrompt = await readFile(join(receiptRun, "nodes", "intake", "prompt.txt"), "utf8");
+    const persistedPrompt = await readFile(join(primary.path, "..", "prompt.txt"), "utf8");
     assert(persistedPrompt.includes(originalPrompt.trim()), "the restarted Activity must use the saved file prompt");
     assert.equal(primaryReceipt.promptSha256, createHash("sha256").update(persistedPrompt.slice(0, -1)).digest("hex"));
     await assert.rejects(readFile(promptPath), { code: "ENOENT" });
@@ -196,7 +221,8 @@ async function main(): Promise<void> {
         ? state
         : undefined;
     }, "completed parallel siblings");
-    const request = settledSiblings.nodes.feasibility.recovery!;
+    const request = settledSiblings.nodes.feasibility.recoveryRequests?.find((candidate) => candidate.status === "waiting");
+    assert(request, "the failed node must expose its pending recovery request");
     assert.equal(request.failure.kind, "network");
     assert.equal(request.canResumeSession, true);
     assert(request.failure.providerSessionId, "the failed Activity must expose its heartbeated provider session");
@@ -241,6 +267,152 @@ async function main(): Promise<void> {
       );
     }
 
+    // Two failed queue items remain independently recoverable, and operator waits release the sole permit.
+    await stop(worker);
+    const queueRecoveryWorkflowPath = join(temporary, "queue-recovery.yaml");
+    await writeFile(queueRecoveryWorkflowPath, YAML.stringify({
+      version: 1,
+      name: "Queue recovery",
+      defaults: { provider: "simulated", max_parallelism: 1, retry: { maximum_attempts: 1 }, delay_ms: 30 },
+      nodes: {
+        plan: {
+          prompt: "Plan two tasks.",
+          outputs: { tasks: "string[]" },
+          demo_output: { tasks: ["first", "second"] },
+        },
+        review: {
+          needs: ["plan"],
+          prompt: "Review one task.",
+          for_each: { items: "$nodes.plan.output.tasks", as: "task", max_parallelism: 1 },
+          outputs: { result: "string" },
+          demo_outputs: [{ result: "first done" }, { result: "second done" }],
+        },
+      },
+    }));
+    const queueRecoveryRunId = await startRun(environment, 30, queueRecoveryWorkflowPath);
+    worker = launch(process.execPath, ["--import", "tsx", "src/worker.ts"], {
+      ...environment,
+      YAMLFLOW_TEST_NETWORK_FAILURE_NODE: "review",
+      YAMLFLOW_TEST_NETWORK_FAILURE_ATTEMPTS: "1",
+    });
+    const queueRecoveryRun = join(temporary, "runs", queueRecoveryRunId);
+    const queueWaiting = await waitFor(async () => {
+      const state = await readJson<RunState>(join(queueRecoveryRun, "state.json"));
+      const requests = state?.nodes.review.recoveryRequests?.filter((candidate) => candidate.status === "waiting") ?? [];
+      return requests.length === 2 ? { state: state!, requests } : undefined;
+    }, "two independently projected queue recovery requests");
+    assert.equal(queueWaiting.state.status, "waiting_for_recovery");
+    for (const pending of queueWaiting.requests) {
+      const response = await fetch(`http://127.0.0.1:${dashboardPort}/api/runs/${encodeURIComponent(queueRecoveryRunId)}/recovery`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ requestId: pending.requestId, action: "retry_same_session" }),
+      });
+      const receipt = await response.json() as AgentRecoveryReceipt & { error?: string };
+      if (!response.ok) throw new Error(receipt.error ?? `Queue recovery API rejected ${pending.requestId}`);
+      assert.equal(receipt.accepted, true);
+    }
+    const recoveredQueueRun = await waitFor(async () => {
+      const state = await readJson<RunState>(join(queueRecoveryRun, "state.json"));
+      return state?.status === "completed" ? state : undefined;
+    }, "multi-item queue recovery completion");
+    assert.equal(recoveredQueueRun.nodes.review.completedItems, 2);
+    const queueRecoveryEvents = await readEvents(temporary, queueRecoveryRunId);
+    assert.equal(queueRecoveryEvents.filter((event) => event.type === "recovery.required" && event.nodeId === "review").length, 2);
+
+    // Preserve corrupt evidence while a fresh recovery cycle commits through a distinct dispatch path.
+    await stop(worker);
+    const corruptWorkflowPath = join(temporary, "corrupt-recovery.yaml");
+    await writeFile(corruptWorkflowPath, YAML.stringify({
+      version: 1,
+      name: "Corrupt receipt recovery",
+      defaults: { provider: "simulated", max_parallelism: 1, retry: { maximum_attempts: 2 }, delay_ms: 60 },
+      nodes: {
+        repair: {
+          prompt: "Produce one recoverable result.",
+          outputs: { value: "string" },
+          demo_output: { value: "recovered" },
+        },
+      },
+    }));
+    const corruptRunId = await startRun(environment, 60, corruptWorkflowPath);
+    worker = launch(process.execPath, ["--import", "tsx", "src/worker.ts"], {
+      ...environment,
+      YAMLFLOW_TEST_PAUSE_AFTER_RECEIPT_NODE: "repair",
+      YAMLFLOW_TEST_PAUSE_AFTER_RECEIPT_MS: "30000",
+    });
+    const corruptRun = join(temporary, "runs", corruptRunId);
+    const originalDispatch = await waitFor(
+      () => firstDispatchReceipt(join(corruptRun, "nodes", "repair")),
+      "receipt to corrupt before Activity acknowledgement",
+    );
+    await stop(worker, "SIGKILL");
+    await writeFile(originalDispatch.path, `${JSON.stringify({
+      ...originalDispatch.receipt,
+      receiptSha256: "corrupt",
+    }, null, 2)}\n`);
+    worker = launch(process.execPath, ["--import", "tsx", "src/worker.ts"], environment);
+    const corruptWaiting = await waitFor(async () => {
+      const state = await readJson<RunState>(join(corruptRun, "state.json"));
+      return state?.status === "waiting_for_recovery" ? state : undefined;
+    }, "integrity recovery request");
+    const corruptRequest = corruptWaiting.nodes.repair.recoveryRequests?.find((candidate) => candidate.status === "waiting");
+    assert(corruptRequest, "corrupt evidence must create a recovery request");
+    assert.equal(corruptRequest.failure.kind, "integrity_error");
+    const freshResponse = await fetch(`http://127.0.0.1:${dashboardPort}/api/runs/${encodeURIComponent(corruptRunId)}/recovery`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ requestId: corruptRequest.requestId, action: "retry_fresh_session" }),
+    });
+    const freshReceipt = await freshResponse.json() as AgentRecoveryReceipt & { error?: string };
+    if (!freshResponse.ok) throw new Error(freshReceipt.error ?? "Fresh recovery API rejected the command");
+    const recoveredCorruptRun = await waitFor(async () => {
+      const state = await readJson<RunState>(join(corruptRun, "state.json"));
+      return state?.status === "completed" ? state : undefined;
+    }, "fresh recovery after corrupt receipt");
+    assert.equal(recoveredCorruptRun.completedCount, 1);
+    const dispatchNames = await readdir(join(corruptRun, "nodes", "repair", "dispatches"));
+    assert.equal(dispatchNames.length, 2, "fresh recovery must retain the corrupt dispatch and create another");
+    assert.equal((await readJson<AgentCompletionReceipt>(originalDispatch.path))?.receiptSha256, "corrupt");
+    const freshDispatchName = dispatchNames.find((name) => name.startsWith("recovery-0001-"));
+    assert(freshDispatchName, "fresh recovery must use recovery cycle 1");
+    const committedFreshReceipt = await readJson<AgentCompletionReceipt>(
+      join(corruptRun, "nodes", "repair", "dispatches", freshDispatchName, "completion-receipt.json"),
+    );
+    assert.equal(committedFreshReceipt?.recoveryCycle, 1);
+
+    // A runtime non-array source must close the execution instead of looping Workflow Tasks.
+    const invalidArrayWorkflowPath = join(temporary, "invalid-array-source.yaml");
+    await writeFile(invalidArrayWorkflowPath, YAML.stringify({
+      version: 1,
+      name: "Invalid runtime array source",
+      defaults: { provider: "simulated", max_parallelism: 1, retry: { maximum_attempts: 1 } },
+      nodes: {
+        review: {
+          prompt: "Review one task.",
+          for_each: { items: "$input.tasks", as: "task", max_parallelism: 1 },
+          outputs: { result: "string" },
+        },
+      },
+    }));
+    const invalidArrayInputPath = join(temporary, "invalid-array-input.json");
+    await writeFile(invalidArrayInputPath, JSON.stringify({ tasks: "not-an-array" }));
+    const invalidArrayRunId = await startRun(environment, 0, invalidArrayWorkflowPath, invalidArrayInputPath);
+    const invalidArrayRun = join(temporary, "runs", invalidArrayRunId);
+    await waitFor(async () => {
+      const state = await readJson<RunState>(join(invalidArrayRun, "state.json"));
+      return state?.status === "failed" ? state : undefined;
+    }, "invalid array projection failure");
+    const temporalConnection = await Connection.connect({ address });
+    try {
+      const description = await new Client({ connection: temporalConnection }).workflow
+        .getHandle(`yamlflow-${invalidArrayRunId}`)
+        .describe();
+      assert.equal(description.status.name, "FAILED");
+    } finally {
+      await temporalConnection.close();
+    }
+
     console.log(JSON.stringify({
       ok: true,
       receiptRecovery: {
@@ -259,13 +431,32 @@ async function main(): Promise<void> {
         providerSessionId: request.failure.providerSessionId,
         completedSiblingsRerun: 0,
       },
+      queueRecovery: {
+        runId: queueRecoveryRunId,
+        pendingRequestsExposed: queueWaiting.requests.length,
+        waitingItemReleasedPermit: true,
+        completedItems: recoveredQueueRun.nodes.review.completedItems,
+      },
+      corruptReceiptRecovery: {
+        runId: corruptRunId,
+        corruptDispatchRetained: true,
+        freshRecoveryCycle: committedFreshReceipt?.recoveryCycle,
+        completed: true,
+      },
+      invalidArraySource: {
+        runId: invalidArrayRunId,
+        temporalStatus: "FAILED",
+      },
+      ...(evidenceDirectory ? { evidenceDirectory } : {}),
     }, null, 2));
   } finally {
-    processes.reverse().forEach((process) => {
-      if (process.exitCode === null && process.signalCode === null) process.kill("SIGTERM");
-    });
-    await new Promise((done) => setTimeout(done, 500));
-    await rm(temporary, { recursive: true, force: true });
+    await Promise.all(processes.reverse().map((process) => stop(process)));
+    if (evidenceDirectory) {
+      await mkdir(dirname(evidenceDirectory), { recursive: true });
+      await rename(temporary, evidenceDirectory);
+    } else {
+      await rm(temporary, { recursive: true, force: true });
+    }
   }
 }
 

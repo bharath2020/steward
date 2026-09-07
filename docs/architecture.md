@@ -1,6 +1,6 @@
 # Steward architecture
 
-Status: current implementation, reviewed 2026-09-05. For the target, read the [vision](vision.md), [decisions](decisions.md), [technical design](technical-design.md), and [production roadmap](production-roadmap.md).
+Status: current implementation, reviewed 2026-09-07. For the target, read the [vision](vision.md), [decisions](decisions.md), [technical design](technical-design.md), and [production roadmap](production-roadmap.md).
 
 For component ownership and the current-file extraction map, read the [software architecture](software-architecture.md).
 
@@ -15,7 +15,7 @@ The project remains one TypeScript package. **Steward CLI**, **Steward Server**,
 | Steward Server | `src/server/index.ts`, `src/authoring.ts` | Serve snapshots/SSE, accept the existing start/input/recovery requests, mediate bounded read-only Codex/Claude authoring, and serve Steward Console. `createDashboardServer` constructs the server; `main` binds it to loopback. |
 | UI templates | `src/server/templates.ts`, `ui/templates/` | Compose a shell from known toolbar, run-list, graph, inspector, and timeline fragments. Resolve application-owned UI files relative to the server module and serve an explicit asset allowlist. |
 | Steward Console | `ui/assets/` | Share one graph/event/action implementation across layouts and themes. Observe shows durable runs; Build holds browser-session chat/YAML and previews parser-accepted definitions. Appearance code owns browser preferences; CSS owns layout and color. |
-| Temporal worker and core | `src/worker.ts`, `src/workflows.ts`, `src/activities.ts`, and the existing flat shared modules | Poll Temporal, advance the graph deterministically, execute node work, and persist evidence. Legacy runtime exports and behavior remain in place. |
+| Temporal worker and core | `src/worker.ts`, `src/workflows.ts`, `src/activities.ts`, and the existing flat shared modules | Poll Temporal, advance the graph deterministically through the single `stewardWorkflow` interpreter, execute node work, and persist evidence. |
 
 Root `src/start.ts`, `src/answer.ts`, `src/launcher.ts`, and `src/server.ts` are compatibility entrypoints. Existing root npm commands and recovery-harness paths continue to work. The CLI connects to Temporal through `src/client.ts` directly; it does not require the HTTP server. This extraction does not yet implement the target `ControlPlane`, transactional stores, or reconciled read service: the HTTP server still reads disk projections and forwards commands through the shared client.
 
@@ -27,21 +27,22 @@ Build mode places an agent chat rail beside the existing SVG graph on desktop an
 
 `ui/brand.json` supplies escaped display text to Steward Console using the approved Steward name. Repository relocation and publication are still in progress. UI templates are reusable presentation fragments, layouts, and themes; this change does not establish a GitHub starter-template repository.
 
-The display-name change preserves compatibility: existing `YAMLFLOW_*` settings, `yamlflow-<runId>` workflow IDs, the `yamlflow-agent-nodes` task queue, and the `yamlAgentWorkflow`/`yamlAgentWorkflowV2` workflow types retain their established spelling. Existing schema names, persisted identities, and historical provenance are unchanged.
+Some pre-adoption local identifiers still use the YAMLFlow working name. ADR-016 replaces the old Workflow registrations with the single `stewardWorkflow` type. Existing runtime files and historical provenance are preserved, but removed-type executions are not supported by the current worker.
 
 ## Execution flow
 
 Steward separates orchestration from agent work.
 
 1. The control plane loads and validates the YAML, hashes it, and starts one Temporal workflow with the immutable definition and initial input.
-2. The Temporal workflow computes ready nodes only from committed dependency results. A ready set is a wave; its members execute concurrently up to global and named-group `max_parallelism` limits.
+2. The Temporal workflow computes ready nodes only from committed dependency results. A ready set is a wave; its work queue executes concurrently up to global, named-group, and node-local `for_each.max_parallelism` limits.
 3. Each node runs as an Activity. In `simulated` mode it emits deterministic demo output. In `codex` mode it launches an isolated, read-only `codex exec` process with a generated JSON Schema and resolved inputs. The Activity parses `thread.started`, immediately heartbeats the provider session, and uses `codex exec resume` on a matching automatic retry.
 4. Agent output validation and receipt commit happen before the result becomes available to downstream nodes. Human nodes wait for a validated `submitHumanInput` Update and record an `{answer}` result through the event path. That human path does not yet create the same output artifact and receipt; closing this gap is a production hardening requirement.
 5. A node may define a bounded `loop`. Its last output is carried into the next iteration under `carry_as`; the loop exits only when `until` passes or its explicit exhaustion policy applies. Arbitrary graph cycles remain invalid.
-6. Before an Activity returns, its schema-valid output is bound into an immutable completion receipt containing the Workflow Run ID, one-time dispatch token, node/iteration identity, provider session, and prompt/schema/output hashes. A second immutable copy is written under `receipts/`. On retry, matching evidence can restore a missing copy or output projection without invoking the provider again; invalid or disagreeing evidence is rejected.
-7. Temporal stores replayable execution history in `runtime/temporal.db`. The application also writes `definition.json`, `input.json`, `state.json`, `events.jsonl`, and per-node prompt/input/schema/output artifacts under `runtime/runs/<run-id>/`. Each node also owns a deduplicated `messages.jsonl` containing only human-readable agent messages.
-8. Retryable provider failures receive the YAML-defined automatic attempt budget. After exhaustion, the V2 Workflow waits durably for a validated `submitAgentRecovery` Update. The operator may resume the checkpointed session, start fresh, or abort. Parallel siblings that already committed are not rerun.
-9. The dashboard reads only those durable artifacts and receives snapshots over SSE. It never decides workflow state.
+6. An agent node may define `for_each` over an input or dependency array. The interpreter expands that array into source-ordered work items, injects one item under `as`, drains them with the strictest applicable concurrency cap, and aggregates committed item outputs back into source order. Each item has its own Activity iteration, provider session, artifacts, recovery request, and completion receipt. Empty arrays commit without provider work. `for_each` and `loop` are mutually exclusive.
+7. Before an Activity returns, its schema-valid output is bound into an immutable completion receipt containing the Workflow Run ID, one-time dispatch token, recovery cycle, node/iteration identity, provider session, and prompt/schema/output hashes. Candidate evidence and the primary receipt live in a dispatch-scoped directory; a token/cycle-specific mirror is written under `receipts/`, while the accepted logical output has a stable path. On retry, matching evidence can restore a missing copy or output projection without invoking the provider again. Invalid evidence is retained but rejected, and fresh recovery writes a distinct dispatch.
+8. Temporal stores replayable execution history in `runtime/temporal.db`. The application also writes `definition.json`, `input.json`, `state.json`, `events.jsonl`, and per-node prompt/input/schema/output artifacts under `runtime/runs/<run-id>/`. Queued item artifacts live under `nodes/<node-id>/items/<index>/`. Each node also owns a deduplicated `messages.jsonl` containing only human-readable agent messages.
+9. Retryable provider failures receive the YAML-defined automatic attempt budget. After exhaustion, the Workflow releases its execution permit and waits durably for a validated `submitAgentRecovery` Update. Every failed queue item has an independently addressable request; sibling completion or retry events cannot hide another pending request. The operator may resume the checkpointed session, start fresh, or abort. Parallel siblings and queued items that already committed are not rerun.
+10. The dashboard reads only those durable artifacts and receives snapshots over SSE. It never decides workflow state.
 
 The root Codex agent is an operator: start, inspect, retry through Temporal, and report. It does not answer node prompts. That boundary is also recorded in `AGENTS.md`.
 
@@ -55,7 +56,7 @@ Compiled nodes always contain assignment text in `prompt`. File sources also car
 
 The bundled Temporal development server uses persistent SQLite so workflows survive worker or launcher restarts. The browser's EventSource reconnects after a network interruption and reloads the latest disk projection. Production should use Temporal Cloud or a production Temporal deployment, external artifact storage, authenticated APIs, idempotent side effects, secrets management, and workload-specific sandbox policies.
 
-Run `npm run resume` after stopping the local stack. It opens the same Temporal database, starts a worker, and does not create a duplicate workflow. New executions use `yamlAgentWorkflowV2`; `yamlAgentWorkflow` remains registered so pre-upgrade V1 histories can replay without a command-sequence mismatch.
+Run `npm run resume` after stopping the local stack. It opens the same Temporal database, starts a worker, and does not create a duplicate workflow. New executions use `stewardWorkflow`. Pre-adoption runs under removed `yamlAgentWorkflow*` types remain stored but require their matching historical bundle to resume.
 
 Run `npm run verify:recovery` for a destructive-to-its-own-temp-directory test that:
 
@@ -64,19 +65,22 @@ Run `npm run verify:recovery` for a destructive-to-its-own-temp-directory test t
 3. restarts the worker and requires receipt reconciliation with zero provider reruns;
 4. exhausts two injected network attempts in one parallel branch;
 5. resumes its heartbeated session through a Workflow Update; and
-6. requires the workflow to finish without rerunning already-completed siblings or duplicating transition IDs.
+6. requires the workflow to finish without rerunning already-completed siblings or duplicating transition IDs;
+7. exposes two concurrent item-level recovery requests under a permit cap of one;
+8. retains a corrupt dispatch while a fresh cycle commits separately; and
+9. verifies that a resolved non-array queue source closes Temporal as `FAILED`.
 
-Application events use stable IDs. On an Activity retry, the store detects an existing transition, replays `events.jsonl`, and reconstructs `state.json`. Temporal history remains the scheduling authority; the JSONL timeline is the readable audit projection.
+Application events use stable IDs. On an Activity retry, the store detects an existing transition, replays `events.jsonl`, and reconstructs `state.json`. Temporal history is the scheduling and recovery authority; the JSONL timeline is an operator-readable projection serialized within the supported single Steward worker process. The implementation intentionally adds no second queue or distributed-lock authority. Multi-worker projection requires a Temporal-native redesign before that topology is supported.
 
 Both receipt copies and SQLite live on the same host in this demo. Whole-host or disk loss is therefore outside its durability boundary; externally replicated storage is required for that failure class.
 
 ## Current production gaps
 
-The dashboard currently reads disk projections without reconciling Temporal lifecycle, and `/health` checks the runtime directory rather than complete service readiness. Event/message locks are process-local. Start requests lack a stable caller command ID; HTTP control is always enabled on loopback. Authoring checks same-loopback Origin but does not yet use the target local session credential. Receipt storage paths omit recovery cycle even though validation includes it, which can prevent fresh recovery when earlier receipt evidence is invalid. Whole definitions and outputs are repeatedly included in history, and the scheduler waits on whole waves.
+The dashboard currently reads disk projections without reconciling Temporal lifecycle, and `/health` checks the runtime directory rather than complete service readiness. Start requests lack a stable caller command ID; HTTP control is always enabled on loopback. Authoring checks same-loopback Origin but does not yet use the target local session credential. Whole definitions and outputs are repeatedly included in history. The current disk projection supports one worker process; adding worker replicas without moving projection events behind Temporal-owned coordination is unsupported.
 
 The launcher also remains tied to the repository working directory. `src/cli/launcher.ts` hardcodes `runtime/temporal.db` and `runtime/services`, and probes Temporal at port 7233, while `src/store.ts` honors `YAMLFLOW_RUNTIME_DIR` and the client/worker honor `TEMPORAL_ADDRESS`. Overriding these variables does not relocate the launcher's database/logs or configure its Temporal probe. A future shared runtime profile must align these settings; moving source files into components has not fixed this limitation.
 
-These are source-reviewed gaps, not repaired behavior. The [technical design](technical-design.md) specifies the replacement contracts, including common human/final commits, transactional evidence, isolated dispatches, status reconciliation, bounded history, safe control, and preserved legacy replay.
+These are source-reviewed gaps, not repaired behavior. The [technical design](technical-design.md) specifies the replacement contracts, including common human/final commits, transactional evidence, isolated dispatches, status reconciliation, bounded history, and safe control.
 
 The browser in `ui/assets/app.js` also re-evaluates loop conditions with fewer operators than the runtime (`contains` and `truthy` are missing), so its loop result label can drift. The target assigns predicate evaluation to the interpreter and carries an explicit outcome into shared presentation.
 
@@ -91,6 +95,6 @@ The full `npm run verify` passed with exit 0 and 25/25 tests. Isolated simulated
 
 Under ADR-012, `Setup Steward.command` and `scripts/setup.sh` bootstrap macOS prerequisites and invoke `src/cli/setup.ts`. The catalog in `src/cli/examples.ts` binds four bundled YAML files to their input JSON. `src/cli/readiness.ts` checks both Temporal poller types and dashboard health. The setup starts the existing launcher detached only when services need attention, then submits the first simulated example or reconnects to saved runs. Example-specific `.command` files explicitly submit new runs. Bootstrap/setup locks serialize clicks; a start-intent record prevents automatic retries after an uncertain submission. None of these records accept node output or define workflow completion.
 
-The supervisor remains local and does not start at login. Setup prints its PID and logs to `runtime/services/`; SIGTERM cleans up its owned services. Existing services and their dashboard example settings are reused. The legacy fixed database/log path and task queue remain; setup rejects runtime-directory and Temporal-address overrides. See the README for prerequisite installation, restart, and uncertain-start behavior.
+The supervisor remains local and does not start at login. Setup prints its PID and logs to `runtime/services/`; SIGTERM cleans up its owned services. Existing services and their dashboard example settings are reused. The fixed database/log path and task queue remain; setup rejects runtime-directory and Temporal-address overrides. See the README for prerequisite installation, restart, and uncertain-start behavior.
 
 Validation on 2026-09-06: typecheck and 50 tests passed with exit 0; shell syntax and all four example/input catalogs passed. The installed-prerequisite setup path restarted Temporal and a single worker from the existing database, then a repeat launch kept the same worker and 22 saved runs. All 181 pre-existing `output.json` hashes were unchanged. The file-prompt example submitted through setup as `2026-09-06T08-30-44-705Z-a5e91b`; Temporal Run ID `01a075d7-61e9-720f-84a1-a591f4b15d70` completed at history event 35, with the matching committed review output and receipt. Missing-prerequisite Homebrew installation was source-checked but not executed on a clean Mac. These checks do not claim production/reboot durability or full P2 qualification.

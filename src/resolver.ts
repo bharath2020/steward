@@ -55,3 +55,16 @@ export function resolveNodeInputs(
     Object.entries(node.inputs).map(([key, value]) => [key, resolveValue(value, initialInput, outputs)]),
   );
 }
+
+export function resolveForEachItems(
+  node: WorkflowNode,
+  initialInput: JsonValue,
+  outputs: Record<string, JsonValue>,
+): JsonValue[] {
+  if (!node.for_each) throw new Error(`Node ${node.id} does not declare for_each`);
+  const value = resolveReference(node.for_each.items, initialInput, outputs);
+  if (!Array.isArray(value)) {
+    throw new Error(`Reference ${node.for_each.items} for node ${node.id} did not resolve to an array`);
+  }
+  return value;
+}

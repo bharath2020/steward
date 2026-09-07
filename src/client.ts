@@ -37,7 +37,7 @@ export async function startWorkflow(options: StartOptions): Promise<{ runId: str
     delayMs: options.delayMs,
   };
   const workflowId = `yamlflow-${runId}`;
-  await client.workflow.start("yamlAgentWorkflowV2", {
+  await client.workflow.start("stewardWorkflow", {
     workflowId,
     taskQueue: TASK_QUEUE,
     args: [input],

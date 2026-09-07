@@ -2,7 +2,7 @@
 
 Status: target reference, staged by the [production roadmap](production-roadmap.md). Last aligned: 2026-09-05.
 
-This document describes the installable CLI, presentation, and future YAML language. The [vision](vision.md) sets scope; the [decision register](decisions.md) records adopted choices; the [technical design](technical-design.md) governs execution, identity, storage, and migration contracts. Those documents take precedence over older details here. Features below are targets, not shipped capabilities. The existing `version: 1` format, human-input gates, and supported Temporal histories must remain usable throughout migration. Nested V2 language delivery follows the hardened existing workflow model rather than blocking its release.
+This document describes the installable CLI, presentation, and future YAML language. The [vision](vision.md) sets scope; the [decision register](decisions.md) records adopted choices; the [technical design](technical-design.md) governs execution, identity, storage, and migration contracts. Those documents take precedence over older details here. Features below are targets, not shipped capabilities. The current `version: 1` format and human-input gates remain the implemented language. Under ADR-016, pre-adoption Workflow types are not compatibility targets.
 
 The approved product components are **Steward CLI**, **Steward Server**, and **Steward Console** (the browser UI). This older command proposal retains lowercase `yamlflow` executable, configuration, and schema examples as historical target identifiers; approving the display name has not implemented or renamed those proposed contracts. Current `YAMLFLOW_*` settings and Temporal execution identities remain compatible.
 
@@ -27,11 +27,11 @@ The main orchestrator coordinates only. Agent prompts execute only through bound
 The current demo has a good durable kernel:
 
 - `src/definition.ts` parses YAML, normalizes defaults, creates node output schemas, rejects unknown dependencies and DAG cycles, validates demo output, and hashes the definition.
-- `src/workflows.ts` contains generic V1 and V2 Temporal Workflow interpreters. It finds dependency-ready nodes, applies global/group concurrency limits, fans out Activities, waits for each released set, performs bounded node loops, and waits for recovery Updates.
+- `src/workflows.ts` contains the single `stewardWorkflow` Temporal interpreter. It finds dependency-ready nodes, drains a rolling queue under global/group/node limits, performs bounded node loops, and waits for recovery Updates.
 - `src/activities.ts` owns filesystem and provider side effects. It resolves prompts, runs simulated or Codex work, heartbeats provider-session identity, validates output, persists human-readable agent messages, and commits completion receipts.
 - `src/completion-receipt.ts` binds successful output to workflow/node/session/prompt/schema identity with two immutable receipt copies.
 - `src/store.ts` appends readable events and rebuilds `state.json` from `events.jsonl`. Temporal history remains the scheduling authority.
-- `src/client.ts` starts V2 workflows and submits recovery Updates.
+- `src/client.ts` starts `stewardWorkflow` executions and submits recovery Updates.
 - Steward Server in `src/server/index.ts` scans run projections, exposes snapshot/input/recovery HTTP endpoints, streams snapshots over SSE, and serves Steward Console from `ui/` through `src/server/templates.ts`. Root `src/server.ts` is a compatibility entrypoint.
 - Steward CLI in `src/cli/start.ts` and `src/cli/answer.ts` exposes callable command functions. `src/cli/launcher.ts` is the local process supervisor that starts Temporal, the worker, Steward Server, and optionally an example run. Root `src/start.ts`, `src/answer.ts`, and `src/launcher.ts` retain the existing command entry paths.
 
@@ -41,8 +41,8 @@ The current demo has a good durable kernel:
 flowchart LR
   Start["Steward CLI or local launcher"] --> Parser["YAML parser + custom validation"]
   Parser --> Client["Temporal client"]
-  Client --> Workflow["Generic Temporal Workflow V2"]
-  Workflow --> Activity["executeAgentV2 Activity"]
+  Client --> Workflow["stewardWorkflow"]
+  Workflow --> Activity["executeAgent Activity"]
   Activity --> Provider["simulated or Codex process"]
   Activity --> Disk["events, state, artifacts, receipts"]
   Disk --> Server["Steward Server"]
@@ -60,7 +60,7 @@ flowchart LR
 5. `groups` currently combine visual grouping and concurrency limits; they are not executable nested blocks. A loop belongs to one node rather than a real multi-step block.
 6. Provider dispatch is an `if` branch inside one Activity module rather than an executor registry.
 7. The scheduler is wave-oriented. A dependent step waits for the whole ready wave, even when only its own dependencies have committed.
-8. The filesystem event lock is process-local. It is sufficient for the current single worker process but not a multi-process event sequencer.
+8. Event/message projection writes use process-local Promise serialization. It is sufficient for the current single worker process but not a multi-process event sequencer.
 9. The web server is both presentation server and control endpoint. The CLI has no reusable application/control service beneath it.
 10. There is no TUI, non-interactive JSON contract, configuration profile, runtime doctor, packaged authoring skill, or clean detach/attach lifecycle.
 
@@ -111,7 +111,7 @@ The first release caps compiled plan size and embeds it in Workflow input. Large
 
 Workflow YAML does not generate TypeScript Workflow code. A stable workflow type, initially `yamlflowInterpreterV3`, interprets `ExecutionPlan.v1` using deterministic state only. Filesystem, provider, network, clocks outside Temporal APIs, secrets, and subprocess work stay in Activities.
 
-Behavioral changes use replay tests and Temporal patching or a new Workflow type. V1 and V2 Workflow types remain registered until no open histories require them.
+After adoption, behavioral changes use replay tests and Temporal patching or a new Workflow type. Before adoption, ADR-016 keeps only the current Workflow registered and preserves older artifacts without promising replay.
 
 #### 3. Structural blocks, executable steps, and pools are different concepts
 
@@ -490,7 +490,7 @@ The normalized plan is the only orchestration contract consumed by V3.
 interface ExecutionPlanV1 {
   schema: "yamlflow.execution-plan.v1";
   compilerVersion: string;
-  sourceApiVersion: "legacy/v1" | "yamlflow.dev/v1alpha1"; // provenance
+  sourceApiVersion: "steward/v1" | "yamlflow.dev/v1alpha1"; // provenance
   sourceSha256: string;   // provenance; excluded from semantic hash payload
   planSha256: string;     // excludes itself and non-semantic provenance
   inputSchema: JsonSchema202012;
@@ -621,7 +621,7 @@ Keep one package during the first product release. The [software architecture](s
 ```text
 src/
   domain/               versioned types, pure rules, type-only ports
-  spec/                 YAML AST, V1 adapter, V2 structural validation
+  spec/                 YAML AST, current validation, future V2 validation
   compiler/             semantic checks, binding compiler, ExecutionPlan
   policy/               authorization and capability decisions
   commands/             shared durable command ledger service
@@ -661,7 +661,7 @@ Ownership: `docs/`, `fixtures/spec/`
 Ownership: `schemas/`, `src/spec/`, `src/compiler/`, compiler tests
 
 - Publish the V2 workflow meta-schema and diagnostic schema.
-- Implement source-positioned parsing, structural and semantic validation, V1-to-V2 adapter, canonical plan generation, and hashing.
+- Implement source-positioned parsing, structural and semantic validation, canonical plan generation, and hashing.
 - Acceptance: golden diagnostics, stable hash tests, scope/reference tests, malformed-schema tests, and current V1 example migration pass.
 
 ### Packet 2 — domain and control contracts
@@ -678,7 +678,7 @@ Ownership: `src/runtime/temporal/`, `src/execution/`, `src/executors/`, replay/r
 
 - Add V3 interpreter, eager dependency scheduling, hierarchical blocks, pool limits, loop blocks, recovery Updates, and executor registry.
 - Move current Codex/simulated behavior behind executors without weakening heartbeats, cancellation, readable message filtering, or receipt verification.
-- Keep V1/V2 registered unchanged.
+- Keep `stewardWorkflow` as the sole pre-adoption interpreter.
 - Acceptance: replay fixtures pass; parallelism/pool/loop/retry/recovery fault tests pass; no side-effect imports enter Workflow bundles.
 
 ### Packet 4 — transactional store and event stream
@@ -731,7 +731,7 @@ Ownership: release scripts, end-to-end and fault harnesses
 
 The developer preview includes V1 compatibility with existing human questions, agent DAGs, named limits and node loops; simulated and Codex executors; standalone validate/plan; packaged CLI; local profiles; default TUI; optional loopback dashboard; transactional local evidence; and qualified recovery behavior. It retains an explicit local development durability boundary.
 
-Nested V2 agent/group/parallel/loop blocks and richer human approval syntax follow as language work. Preserve existing human gates throughout. Remote control authentication and shared artifact/evidence backends are mandatory for the production team tier, not optional production hardening. Child workflows, executor package discovery, dynamic map/foreach, partial fan-in, schedules, and multi-tenant fairness remain deferred.
+Nested V2 agent/group/parallel/loop blocks and richer human approval syntax follow as language work. Preserve existing human gates throughout. Remote control authentication and shared artifact/evidence backends are mandatory for the production team tier, not optional production hardening. Child workflows, executor package discovery, nested-language map/foreach, partial fan-in, schedules, and multi-tenant fairness remain deferred. The current `version: 1` runtime has the narrower explicit `for_each` extension recorded in ADR-015; it is not the compiled nested-scope construct described here.
 
 ## Release acceptance criteria
 
@@ -747,7 +747,7 @@ Apply these criteria to the feature's phase in the roadmap; its production fault
 8. Completed outputs and completion receipts survive projection reconstruction without provider reruns.
 9. `--output json` and JSONL events validate against published schemas and contain no prose contamination.
 10. The dashboard is optional, loopback-only by default, and produces the same status/topology interpretation as the TUI.
-11. Current V1 runs replay with the unchanged V1/V2 Workflow definitions.
+11. Current `stewardWorkflow` histories replay with the release bundle; compatibility commitments begin at adoption.
 12. Typecheck, unit, integration, CLI E2E, TUI renderer, browser E2E, recovery fault, and Temporal replay suites all exit zero.
 
 ## External design references
