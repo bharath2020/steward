@@ -53,8 +53,8 @@ export class Harness {
   assertAlive() {
     for (const child of this.children) assert(child.exitCode === null && child.signalCode === null, `Service exited; inspect ${this.root}`);
   }
-  launch(command: string, args: string[], name: string) {
-    const child = spawn(command, args, { env: this.env, stdio: ["ignore", "pipe", "pipe"] });
+  launch(command: string, args: string[], name: string, cwd?: string) {
+    const child = spawn(command, args, { cwd, env: this.env, stdio: ["ignore", "pipe", "pipe"] });
     const log = createWriteStream(join(this.root, `${name}.log`));
     child.stdout!.pipe(log, { end: false }); child.stderr!.pipe(log, { end: false });
     child.on("error", error => { log.write(String(error)); });
@@ -75,7 +75,7 @@ export class Harness {
     return result;
   }
   async run(workflow: string, input = "examples/product-input.json") {
-    const result = await this.cli("start", ["--workflow", workflow, "--input", input, "--mode", "simulated", "--delay-ms", "5"]);
+    const result = await this.cli("start", ["--working-directory", this.root, "--workflow", workflow, "--input", input, "--mode", "simulated", "--delay-ms", "5"]);
     const identity = JSON.parse(result.stdout);
     assert.equal(identity.workflowId, `yamlflow-${identity.runId}`);
     return identity.runId as string;

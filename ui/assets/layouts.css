@@ -131,3 +131,10 @@ body { height: 100dvh; display: flex; flex-direction: column; }
   body { height: auto; min-height: 100dvh; overflow: auto; }
   .workspace { flex: none; min-height: 680px; }
 }
+
+/* Leave room for editable JSON and preview beside historical runs. */
+@media (min-width: 1101px) {
+  :root[data-workspace="observe"] .workspace { grid-template-columns: 270px minmax(280px, 1fr) 300px; }
+  .run-rail { overflow-y: auto; }
+  .run-list { flex-shrink: 0; }
+}

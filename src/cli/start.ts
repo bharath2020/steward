@@ -14,6 +14,7 @@ export async function main(argv = process.argv): Promise<void> {
   const delayRaw = argument(argv, "--delay-ms");
   if (mode !== "simulated" && mode !== "codex") throw new Error("--mode must be simulated or codex");
   const result = await startWorkflow({
+    workingDirectory: argument(argv, "--working-directory")!,
     definition: await loadWorkflow(workflowPath),
     initialInput: await loadInitialInput(inputPath),
     mode,

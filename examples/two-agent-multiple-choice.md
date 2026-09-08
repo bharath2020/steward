@@ -25,7 +25,7 @@ npm run resume
 Keep that terminal open. In another terminal, start this example:
 
 ```sh
-npm run start -- --workflow workflows/two-agent-multiple-choice.yaml --input examples/two-agent-multiple-choice-input.json --mode simulated
+npm run start -- --working-directory /path/to/repository --workflow workflows/two-agent-multiple-choice.yaml --input examples/two-agent-multiple-choice-input.json --mode simulated
 ```
 
 The command prints `runId` and `workflowId`. Open

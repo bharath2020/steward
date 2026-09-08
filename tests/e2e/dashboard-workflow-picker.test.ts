@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, readdir, rename, symlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { createRequire } from "node:module";
 import { join } from "node:path";
@@ -10,11 +10,11 @@ import { Harness, until } from "./harness";
 import { sha256Json } from "../../src/completion-receipt";
 import type { AgentCompletionReceipt, WorkflowDefinition } from "../../src/contracts";
 
-/* PROVISIONAL ACCEPTANCE CONTRACT, not implemented/adopted API:
+/* Dashboard acceptance contract (ADR-023):
  * YAMLFLOW_CATALOG -> {workflows:[{id,name,workflow,input,allowedRoots}]}
- * GET /api/workflows; POST /api/runs/prepare {workflowId,inputText,mode}
+ * GET /api/workflows; POST /api/runs/prepare {workflowId,inputText,mode,workingDirectory}
  * -> {preparedId,definition,initialInput,mode}; POST /api/runs {preparedId,startId}
- * mode: simulated | workflow. Isolate exact spelling here when the design is adopted.
+ * mode: simulated | workflow; legacy codex override remains supported.
  * Browser prerequisite: installed Playwright+Chromium; STEWARD_PLAYWRIGHT_MODULE
  * may name an existing Playwright module directory. No paid provider is invoked.
  */
@@ -24,7 +24,7 @@ const contract = {
   validateLabel: "Validate and preview", startLabel: "Start new run",
 };
 
-test("proposed dashboard picker through real browser, HTTP, Temporal and provider boundary", { timeout: 180_000 }, async t => {
+test("dashboard picker through real browser, HTTP, Temporal and provider boundary", { timeout: 180_000 }, async t => {
   const h = new Harness();
   t.after(() => h.stop());
   await h.start();
@@ -96,8 +96,8 @@ fs.writeFileSync(args[args.indexOf("--output-last-message")+1], JSON.stringify({
     return { state, definition, receipts };
   }
   async function prepare(id: string, inputText: string, mode = "simulated") {
-    const response = await request(contract.prepare, { workflowId: id, inputText, mode });
-    assert.equal(response.status, 200, `Proposed prepare contract: ${JSON.stringify(response)}`);
+    const response = await request(contract.prepare, { workflowId: id, inputText, mode, workingDirectory: h.root });
+    assert.equal(response.status, 200, `Prepare contract: ${JSON.stringify(response)}`);
     assert.equal(typeof response.body.preparedId, "string");
     return response.body;
   }
@@ -110,7 +110,7 @@ fs.writeFileSync(args[args.indexOf("--output-last-message")+1], JSON.stringify({
 
   let baselineRun = "";
   await t.test("healthy baseline starts configured workflow through existing HTTP and commits simulated evidence", async () => {
-    const response = await request("/api/runs", { mode: "simulated", delayMs: 1 });
+    const response = await request("/api/runs", { mode: "simulated", delayMs: 1, workingDirectory: h.root });
     assert.equal(response.status, 202, JSON.stringify(response));
     baselineRun = response.body.runId;
     await accepted(baselineRun, "Alpha catalog", { marker: "configured input" }, ["simulated"]);
@@ -133,10 +133,12 @@ fs.writeFileSync(args[args.indexOf("--output-last-message")+1], JSON.stringify({
     const picker = page.getByLabel(contract.workflowLabel, { exact: true });
     assert.equal(await picker.count(), 1, "Dashboard must expose an accessible Workflow picker");
     await picker.selectOption("beta");
+    await page.getByLabel("Working directory", { exact: true }).fill(h.root);
     await page.getByLabel(contract.inputLabel, { exact: true }).fill(JSON.stringify({ marker: "chosen in browser" }));
     await page.getByLabel(contract.modeLabel, { exact: true }).selectOption("simulated");
     await page.getByRole("button", { name: contract.validateLabel, exact: true }).click();
     await page.getByRole("region", { name: "Workflow preview", exact: true }).waitFor();
+    await page.screenshot({ path: join(h.root, "dashboard-prepared.png"), fullPage: true });
     const started = page.waitForResponse((response: any) => response.url() === `${url}/api/runs` && response.request().method() === "POST");
     await page.getByRole("button", { name: contract.startLabel, exact: true }).click();
     const response = await started;
@@ -159,6 +161,26 @@ fs.writeFileSync(args[args.indexOf("--output-last-message")+1], JSON.stringify({
     assert.equal(result.state.mode, "simulated");
   });
 
+  await t.test("prepared starts freeze sources and deduplicate concurrent and completed retries", async () => {
+    const prepared = await prepare("beta", JSON.stringify({ marker: "immutable preview" }));
+    const original = await readFile(beta, "utf8");
+    await writeFile(beta, "invalid replacement source");
+    try {
+      const startId = randomUUID();
+      const runs = await Promise.all([start(prepared.preparedId, startId), start(prepared.preparedId, startId)]);
+      assert.equal(runs[0], runs[1]);
+      const result = await accepted(runs[0], "Beta catalog", { marker: "immutable preview" }, ["simulated", "simulated"]);
+      assert.deepEqual(result.definition, prepared.definition);
+      assert.equal(await start(prepared.preparedId, startId), runs[0]);
+      const description = await h.client.workflow.getHandle(`yamlflow-${runs[0]}`).describe();
+      assert.equal(description.runId, result.state.temporalRunId);
+      const other = await prepare("alpha", JSON.stringify({ marker: "other" }));
+      const conflict = await request(contract.start, { preparedId: other.preparedId, startId });
+      assert.equal(conflict.status, 400);
+      assert.match(conflict.body.error, /already bound/);
+    } finally { await writeFile(beta, original); }
+  });
+
   await t.test("workflow mode dispatches each declared provider while simulation overrides it", async () => {
     const before = (await calls()).length;
     const prepared = await prepare("beta", JSON.stringify({ marker: "declared providers" }), "workflow");
@@ -177,6 +199,31 @@ fs.writeFileSync(args[args.indexOf("--output-last-message")+1], JSON.stringify({
     assert.match(String(response.body.error), /JSON|input/i);
     assert.deepEqual(await runIds(), before);
     assert.equal((await calls()).length, launches);
+  });
+
+  await t.test("preflight rejects missing repository and missing root input without scheduling", async () => {
+    const before = await runIds();
+    const missingDirectory = await request(contract.prepare, { workflowId: "beta", inputText: "{}", mode: "simulated" });
+    assert.equal(missingDirectory.status, 400);
+    assert.match(missingDirectory.body.error, /working directory/i);
+    const missingInput = await request(contract.prepare, { workflowId: "beta", inputText: "{}", mode: "simulated", workingDirectory: h.root });
+    assert.equal(missingInput.status, 400);
+    assert.match(missingInput.body.error, /input.*marker/i);
+    assert.deepEqual(await runIds(), before);
+  });
+
+  await t.test("a replaced repository path cannot redirect a prepared run", async () => {
+    const directory = join(h.root, "prepared-repository");
+    await mkdir(directory);
+    const response = await request(contract.prepare, { workflowId: "beta", inputText: JSON.stringify({ marker: "bound repository" }), mode: "simulated", workingDirectory: directory });
+    assert.equal(response.status, 200);
+    await rename(directory, `${directory}-original`);
+    await symlink(h.root, directory);
+    const before = await runIds();
+    const started = await request(contract.start, { preparedId: response.body.preparedId, startId: randomUUID() });
+    assert.equal(started.status, 400);
+    assert.match(started.body.error, /working directory changed/);
+    assert.deepEqual(await runIds(), before);
   });
 
   await t.test("an unknown prepared intent cannot silently start the configured workflow", async () => {

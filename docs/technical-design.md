@@ -190,6 +190,8 @@ Back up durable evidence and artifact references together with a manifest and st
 
 ## Migration and rollback
 
+ADR-022 adds a mandatory canonical repository binding to new local starts. The interpreter forwards the recorded workspace-write descriptor to Activities; the executor uses it for fresh/resumed processes, and completion receipts include it in their hash. Old histories omit it and retain read-only behavior. This bounded current implementation does not replace the target policy service or establish transactional side effects.
+
 Before adoption, current runs use only `stewardWorkflow`; the earlier pre-adoption Workflow types are intentionally not registered. Preserve the existing runtime database and run directories without rewriting histories or receipt identities. Their artifacts remain read-only evidence, while resuming one of those executions requires its matching historical bundle.
 
 After adoption, introduce incompatible interpreter or evidence changes through a new versioned Workflow type and additive evidence migration. Canary new runs, drain compatible histories, and never fabricate missing attestations.

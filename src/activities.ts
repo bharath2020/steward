@@ -172,7 +172,8 @@ async function runCodex(input: {
     prompt: input.prompt,
     schemaPath: input.schemaPath,
     outputPath: input.outputPath,
-    cwd: process.cwd(),
+    cwd: input.execution.execution?.workingDirectory ?? process.cwd(),
+    ...(input.execution.execution ? { sandbox: input.execution.execution.sandbox } : {}),
     ...(input.priorSessionId ? { priorSessionId: input.priorSessionId } : {}),
   });
 
@@ -181,7 +182,7 @@ async function runCodex(input: {
   const result = await Promise.race([
     new Promise<{ code: number | null; stderr: string }>((resolveProcess, rejectProcess) => {
       const child = spawn("codex", args, {
-        cwd: process.cwd(),
+        cwd: input.execution.execution?.workingDirectory ?? process.cwd(),
         env: { ...process.env, NO_COLOR: "1" },
         stdio: ["ignore", "pipe", "pipe"],
       });
@@ -282,7 +283,9 @@ function promptFor(execution: AgentExecutionInput): string {
     execution.queueItem
       ? `This is queue item ${execution.queueItem.index + 1} of ${execution.queueItem.count}.`
       : `This is iteration ${execution.iteration}${execution.node.loop ? ` of at most ${execution.node.loop.max_iterations}` : ""}.`,
-    "Do not orchestrate other agents. Do not modify files. Complete only this node's assignment.",
+    execution.execution
+      ? `Do not orchestrate other agents. Complete only this node's assignment. You may modify files in the assigned repository: ${execution.execution.workingDirectory}. Before repeating an interrupted operation, inspect existing files and processes; retries do not undo earlier edits.`
+      : "Do not orchestrate other agents. Do not modify files. Complete only this node's assignment.",
     "Return only JSON matching the provided output schema.",
     ...(execution.recovery
       ? [
@@ -375,7 +378,7 @@ async function executeAgentInternal(execution: AgentExecutionInput): Promise<Age
     iteration: execution.iteration,
     recoveryCycle: execution.recoveryCycle,
   });
-  const canonicalWorkspace = execution.captureSessionAffinity ? await realpath(process.cwd()) : undefined;
+  const canonicalWorkspace = execution.captureSessionAffinity ? await realpath(execution.execution?.workingDirectory ?? process.cwd()) : undefined;
   const priorProviderSessionId = execution.captureSessionAffinity
     ? matchingCheckpoint?.providerSessionId ?? execution.providerSessionId
     : execution.providerSessionId ?? matchingCheckpoint?.providerSessionId;
@@ -480,6 +483,12 @@ async function executeAgentInternal(execution: AgentExecutionInput): Promise<Age
       return recovered;
     }
 
+    if (execution.execution) {
+      const actual = await realpath(execution.execution.workingDirectory);
+      if (actual !== execution.execution.workingDirectory || execution.execution.sandbox !== "workspace-write") {
+        throw new Error("Recorded repository execution binding is invalid or changed");
+      }
+    }
     if (execution.captureSessionAffinity) {
       if (priorProviderSessionId && (!priorAffinity || priorAffinity.provider !== execution.mode || priorAffinity.canonicalWorkspace !== canonicalWorkspace || priorAffinity.sessionId !== priorProviderSessionId)) {
         throw new Error("Provider session identity does not match provider or canonical workspace");

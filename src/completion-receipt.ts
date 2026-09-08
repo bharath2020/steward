@@ -132,6 +132,7 @@ export function buildCompletionReceipt(input: {
     iteration: input.execution.iteration,
     recoveryCycle: input.execution.recoveryCycle,
     provider: input.execution.mode,
+    ...(input.execution.execution ? { execution: input.execution.execution } : {}),
     receiptToken: input.execution.receiptToken,
     promptSha256: input.promptSha256,
     outputSchemaSha256: input.outputSchemaSha256,
@@ -163,6 +164,7 @@ export function validateCompletionReceipt(
     || receipt.iteration !== expected.execution.iteration
     || receipt.recoveryCycle !== expected.execution.recoveryCycle
     || receipt.provider !== expected.execution.mode
+    || canonicalJson(receipt.execution) !== canonicalJson(expected.execution.execution)
     || receipt.receiptToken !== expected.execution.receiptToken
     || receipt.promptSha256 !== expected.promptSha256
     || receipt.outputSchemaSha256 !== expected.outputSchemaSha256

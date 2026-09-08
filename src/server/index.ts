@@ -1,3 +1,4 @@
+import { listWorkflows, prepareRun, startPreparedRun, PreparationError } from "../run-preparation";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
@@ -86,7 +87,9 @@ async function body(request: IncomingMessage, maximumBytes = 1_000_000): Promise
     if (bytes > maximumBytes) throw new Error(`request body exceeds ${maximumBytes} bytes`);
     source += chunk.toString();
   }
-  return source ? (JSON.parse(source) as Record<string, unknown>) : {};
+  const value: unknown = source ? JSON.parse(source) : {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("request body must be a JSON object");
+  return value as Record<string, unknown>;
 }
 
 async function serveStatic(pathname: string, response: ServerResponse): Promise<void> {
@@ -112,6 +115,21 @@ function isLocalAuthoringRequest(request: IncomingMessage): boolean {
     const value = new URL(origin);
     return (value.hostname === "127.0.0.1" || value.hostname === "localhost")
       && Number(value.port || (value.protocol === "https:" ? 443 : 80)) === DASHBOARD_PORT;
+  } catch {
+    return false;
+  }
+}
+
+/** Browser start requests must come from this loopback Console. Local JSON CLI
+ * clients may omit Origin; a prompt or cross-site form cannot grant writes. */
+function isLocalRunStart(request: IncomingMessage): boolean {
+  if (request.headers["content-type"]?.split(";")[0].trim().toLowerCase() !== "application/json") return false;
+  try {
+    const host = new URL(`http://${request.headers.host}`);
+    if (!["127.0.0.1", "localhost"].includes(host.hostname)
+      || host.username || host.password || host.pathname !== "/"
+      || Number(host.port || 80) !== request.socket.localPort) return false;
+    return !request.headers.origin || new URL(request.headers.origin).origin === host.origin;
   } catch {
     return false;
   }
@@ -168,8 +186,17 @@ async function handler(request: IncomingMessage, response: ServerResponse, autho
     json(response, 200, draft);
     return;
   }
-  if (request.method === "POST" && url.pathname === "/api/runs") {
+  if (request.method === "GET" && url.pathname === "/api/workflows") {
+    json(response, 200, await listWorkflows()); return;
+  }
+  if (request.method === "POST" && ["/api/runs", "/api/runs/prepare"].includes(url.pathname)) {
+    if (!isLocalRunStart(request)) {
+      json(response, 403, { error: "Run starts require a local JSON request from this Console or a local client." });
+      return;
+    }
     const requestBody = await body(request);
+    if (url.pathname === "/api/runs/prepare") { json(response, 200, await prepareRun(requestBody)); return; }
+    if (Object.hasOwn(requestBody, "preparedId")) { json(response, 202, await startPreparedRun(requestBody)); return; }
     const mode = (requestBody.mode ?? "simulated") as AgentProvider;
     if (mode !== "simulated" && mode !== "codex") {
       json(response, 400, { error: "mode must be simulated or codex" });
@@ -177,6 +204,7 @@ async function handler(request: IncomingMessage, response: ServerResponse, autho
     }
     const delayMs = typeof requestBody.delayMs === "number" ? requestBody.delayMs : undefined;
     const result = await startWorkflow({
+      workingDirectory: requestBody.workingDirectory as string,
       definition: await loadWorkflow(workflowPath),
       initialInput: await loadInitialInput(inputPath),
       mode,
@@ -238,7 +266,9 @@ export function createDashboardServer(options: { authoringRunner?: AuthoringRunn
   return createServer((request, response) => {
     handler(request, response, options.authoringRunner).catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
-      const status = message.startsWith("request body")
+      const status = error instanceof PreparationError || error instanceof SyntaxError || message.startsWith("request body")
+        || message.startsWith("A repository working directory")
+        || message.startsWith("Working directory must")
         || message.startsWith("provider must")
         || message.startsWith("message must")
         || message.startsWith("message exceeds")

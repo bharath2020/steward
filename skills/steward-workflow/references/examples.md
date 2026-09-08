@@ -8,4 +8,4 @@
 
 - [Parallel review with session continuation](../assets/scope-loop-resume.yaml) with [input](../assets/scope-loop-resume-input.json): the same scope graph opts into a separate ongoing conversation for each parallel leaf; explicit loop state still carries the data.
 
-Examples select simulation explicitly. Change `defaults.provider` to `codex` for real read-only agent execution when requested. Validation does not run either provider.
+Examples select simulation explicitly. Change `defaults.provider` to `codex` for real agent execution when requested, and explicitly select `--mode codex --working-directory /path/to/repository` at start. New runs permit workspace writes; validation and authoring do not grant execution authority. Validation does not run either provider.

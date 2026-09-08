@@ -7,19 +7,22 @@ import { exampleNamed, validateExamples } from "./examples";
 import { dashboardReady, workerReady } from "./readiness";
 import { loadInitialInput, loadWorkflow } from "../definition";
 import { createRunId, startWorkflow } from "../client";
+import { resolveWorkingDirectory } from "../repository-workspace";
 
 export function setupOptions(argv: string[]) {
   let example = "questions";
+  let workingDirectory: string | undefined;
   let newRun = false, check = false, noOpen = false;
   for (let index = 0; index < argv.length; index++) {
     const arg = argv[index];
-    if (arg === "--example") example = argv[++index] ?? "";
+    if (arg === "--working-directory") workingDirectory = argv[++index] ?? "";
+    else if (arg === "--example") example = argv[++index] ?? "";
     else if (arg === "--new-run") newRun = true;
     else if (arg === "--check") check = true;
     else if (arg === "--no-open") noOpen = true;
     else throw new Error(`Unknown setup option: ${arg}`);
   }
-  return { example: exampleNamed(example), newRun, check, noOpen };
+  return { example: exampleNamed(example), newRun, check, noOpen, ...(workingDirectory !== undefined ? { workingDirectory } : {}) };
 }
 
 export async function main(argv = process.argv.slice(2)): Promise<void> {
@@ -30,6 +33,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   await validateExamples();
   console.log("Validated all four bundled workflows and their input bindings.");
   if (options.check) return;
+  const workingDirectory = options.workingDirectory !== undefined || options.newRun
+    ? await resolveWorkingDirectory(options.workingDirectory) : undefined;
 
   await mkdir("runtime/services", { recursive: true });
   const lockPath = "runtime/services/setup.lock";
@@ -68,17 +73,19 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       if (error.code === "ENOENT") return null;
       throw error;
     });
-    if (options.newRun || (runs.length === 0 && !priorAttempt)) {
+    if (workingDirectory && (options.newRun || (runs.length === 0 && !priorAttempt))) {
       const runId = createRunId();
       // Record intent before the network call. An uncertain start is never
       // silently retried merely because its disk projection has not arrived.
-      await writeFile("runtime/services/setup-start.json", JSON.stringify({ runId, workflowId: `yamlflow-${runId}`, example: options.example, attemptedAt: new Date().toISOString() }, null, 2));
+      await writeFile("runtime/services/setup-start.json", JSON.stringify({ runId, workflowId: `yamlflow-${runId}`, example: options.example, workingDirectory, attemptedAt: new Date().toISOString() }, null, 2));
       const result = await startWorkflow({
+        workingDirectory,
         definition: await loadWorkflow(options.example.workflow),
         initialInput: await loadInitialInput(options.example.input), mode: "simulated", delayMs: 500, runId,
       });
       console.log(`Example submitted: ${result.runId}. Completion is reported by Temporal and committed artifacts.`);
-    } else if (runs.length === 0) console.log("A prior start attempt is recorded in runtime/services/setup-start.json. Inspect its Workflow ID in Temporal; no duplicate was submitted.");
+    } else if (!workingDirectory && !priorAttempt && runs.length === 0) console.log("Enter a working directory in the Console to start a run, or use --working-directory /path/to/repository.");
+    else if (runs.length === 0) console.log("A prior start attempt is recorded in runtime/services/setup-start.json. Inspect its Workflow ID in Temporal; no duplicate was submitted.");
     else console.log("Reconnected to saved runs. Use --new-run to start another example.");
     const url = `http://127.0.0.1:${DASHBOARD_PORT}`;
     console.log(`Steward ready: ${url}\nTemporal history: http://127.0.0.1:8233\nData: ${resolve("runtime")}`);

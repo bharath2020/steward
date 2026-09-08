@@ -22,6 +22,8 @@ ADR-019 authorizes an early bounded P4 scope/repeat slice with red-first end-to-
 
 P4 can be explored independently after P1 contracts settle, but is not a prerequisite for qualifying the existing workflow model. Multi-tenant hosting, writable executors, new provider integrations, and a marketplace need separate decisions and gates.
 
+ADR-022 authorizes the bounded local workspace-write executor slice with mandatory repository binding and red-first end-to-end evidence. It does not qualify transactional external effects, descendant-process recovery, shared production execution, or the broader P1–P3 gates.
+
 The portable V1 authoring skill (ADR-018) is available ahead of P4 with current-language examples and offline loader validation. It does not implement the proposed nested language or establish that the P2/P4 release gates pass.
 
 ## First implementation slice

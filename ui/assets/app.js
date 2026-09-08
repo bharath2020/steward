@@ -1,7 +1,7 @@
 const SVG = "http://www.w3.org/2000/svg";
 const ui = Object.fromEntries([
   "graph-shell", "graph-fit", "graph-zoom-in", "graph-zoom-out", "graph-zoom-reset",
-  "connection", "summary-completed", "summary-wave", "summary-elapsed", "mode", "pace", "run-again",
+  "connection", "summary-completed", "summary-wave", "summary-elapsed", "mode", "pace", "run-again", "working-directory",
   "run-count", "run-list", "graph-title", "workflow-file", "definition-hash", "graph", "empty-state",
   "inspector-title", "inspector-status", "inspector-content", "event-count", "durable-path", "timeline", "toast",
   "workspace-observe", "workspace-author",
@@ -773,12 +773,13 @@ function connect(runId) {
 
 async function startRun() {
   if (ui["run-again"].disabled) return;
+  if (!ui["working-directory"].reportValidity()) return;
   ui["run-again"].disabled = true;
   try {
     const response = await fetch("/api/runs", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ mode: ui.mode.value, delayMs: Number(ui.pace.value) }),
+      body: JSON.stringify({ mode: ui.mode.value, delayMs: Number(ui.pace.value), workingDirectory: ui["working-directory"].value }),
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error ?? "Could not start run");
@@ -824,3 +825,50 @@ document.fonts?.ready.then(() => {
 });
 
 connect();
+
+// Draft state is independent of the selected historical run.
+const picker = document.getElementById("workflow-picker");
+const inputJson = document.getElementById("input-json");
+const preview = document.getElementById("workflow-preview");
+const prepareStatus = document.getElementById("prepare-status");
+const startPrepared = document.getElementById("start-prepared");
+let catalogEntries = [], preparedDraft = null, draftRevision = 0, preparedStartId;
+function invalidateDraft() {
+  draftRevision++; preparedDraft = null; preview.hidden = true; startPrepared.disabled = true;
+}
+for (const element of [picker, inputJson, ui.mode, ui["working-directory"]]) element.addEventListener("input", invalidateDraft);
+picker.addEventListener("change", () => {
+  inputJson.value = JSON.stringify(catalogEntries.find(entry => entry.id === picker.value)?.initialInput ?? {}, null, 2);
+  invalidateDraft();
+});
+fetch("/api/workflows").then(async response => {
+  const result = await response.json(); if (!response.ok) throw new Error(result.error);
+  catalogEntries = result.workflows;
+  picker.replaceChildren(...catalogEntries.map(entry => new Option(entry.name, entry.id)));
+  inputJson.value = JSON.stringify(catalogEntries[0]?.initialInput ?? {}, null, 2);
+  if (result.catalogConfigured) { ui["run-again"].hidden = true; ui["run-again"].disabled = true; }
+}).catch(error => { prepareStatus.textContent = String(error); });
+document.getElementById("prepare-run").addEventListener("click", async () => {
+  if (!ui["working-directory"].reportValidity()) return;
+  invalidateDraft(); const revision = draftRevision;
+  prepareStatus.textContent = "Validating…";
+  try {
+    const response = await fetch("/api/runs/prepare", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ workflowId: picker.value, inputText: inputJson.value, mode: ui.mode.value, workingDirectory: ui["working-directory"].value }) });
+    const result = await response.json(); if (!response.ok) throw new Error(result.error);
+    if (revision !== draftRevision) return;
+    preparedDraft = result; preparedStartId = crypto.randomUUID();
+    preview.querySelector("pre").textContent = `${result.definition.name}\n${result.workingDirectory}\nMode: ${result.mode}\n${result.definition.nodes.map(node => node.title).join("\n")}\n${JSON.stringify(result.initialInput, null, 2)}`;
+    preview.hidden = false; startPrepared.disabled = false; prepareStatus.textContent = "Ready to start the reviewed workflow.";
+  } catch (error) { if (revision === draftRevision) prepareStatus.textContent = String(error); }
+});
+startPrepared.addEventListener("click", async () => {
+  if (!preparedDraft || startPrepared.disabled) return;
+  const draft = preparedDraft; startPrepared.disabled = true;
+  try {
+    const response = await fetch("/api/runs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ preparedId: draft.preparedId, startId: preparedStartId }) });
+    const result = await response.json(); if (!response.ok) throw new Error(result.error);
+    selectedRunId = result.runId; selectedNodeId = null; inspectorSignature = null; lastEventCount = 0;
+    connect(result.runId); prepareStatus.textContent = `Started ${result.runId}`;
+    if (preparedDraft === draft) invalidateDraft();
+  } catch (error) { prepareStatus.textContent = String(error); if (preparedDraft === draft) startPrepared.disabled = false; }
+});

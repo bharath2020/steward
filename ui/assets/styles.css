@@ -59,6 +59,7 @@ button, select { font: inherit; }
 
 .run-controls { display: flex; align-items: end; gap: 8px; }
 .run-controls label { display: grid; gap: 5px; }
+.run-controls input { width: 210px; min-width: 0; padding: 8px; border: 1px solid var(--line-bright); background: var(--surface); color: var(--text); font: 12px var(--mono); }
 .run-controls label span { color: var(--quiet); font: 10px/1 var(--mono); letter-spacing: 0.11em; text-transform: uppercase; }
 select {
   height: 38px;
@@ -330,6 +331,8 @@ select {
   .topbar { height: auto; min-height: 64px; grid-template-columns: 1fr auto; gap: 12px; padding: 12px; position: sticky; top: 0; z-index: 10; }
   .run-summary { display: none; }
   .run-controls label { display: none; }
+  .run-controls .working-directory-control { display: grid; }
+  .run-controls input { width: 150px; }
   .workspace { height: auto; display: flex; flex-direction: column; }
   .run-rail { border-right: 0; border-bottom: 1px solid var(--line); max-height: 180px; }
   .graph-panel { height: 610px; }
@@ -350,3 +353,18 @@ select {
 .scope-steps button { min-height: 44px; padding: 10px; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .scope-back { min-height: 44px; padding: 8px 12px; margin-bottom: 12px; border: 1px solid var(--line); background: transparent; color: inherit; cursor: pointer; }
+
+.run-composer { padding: 12px; border-bottom: 1px solid var(--line); }
+.run-composer label { display: block; margin-top: 12px; }
+.run-composer select, .run-composer textarea, .run-composer button { width: 100%; margin-top: 8px; }
+.run-composer textarea { resize: vertical; font-family: monospace; }
+.run-composer pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; }
+.run-composer p { overflow-wrap: anywhere; font-size: 12px; }
+
+.run-composer { padding: 0 0 16px; flex-shrink: 0; }
+.run-composer select, .run-composer textarea { background: var(--surface); color: var(--text); border: 1px solid var(--line-bright); padding: 8px; }
+.run-composer button { background: var(--surface); color: var(--text); border: 1px solid var(--line-bright); padding: 8px; cursor: pointer; }
+.run-composer button:disabled { opacity: .45; cursor: default; }
+.run-composer summary { cursor: pointer; font-weight: 600; }
+.run-composer label { font-size: 12px; color: var(--muted); }
+#run-again[hidden] { display: none; }

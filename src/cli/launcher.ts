@@ -4,6 +4,7 @@ import { createConnection } from "node:net";
 import { resolve } from "node:path";
 import { DASHBOARD_PORT } from "../config";
 import { workerReady, dashboardReady } from "./readiness";
+import { resolveWorkingDirectory } from "../repository-workspace";
 
 function canConnect(port: number): Promise<boolean> {
   return new Promise((done) => {
@@ -36,6 +37,7 @@ function argument(argv: string[], name: string, fallback?: string): string | und
 }
 
 export async function main(argv = process.argv): Promise<void> {
+  const workingDirectory = argv.includes("--no-start") ? undefined : await resolveWorkingDirectory(argument(argv, "--working-directory"));
   const children: ChildProcess[] = [];
   let stopping = false;
   // Preserve the existing local-launcher paths. The durable store's runtime
@@ -104,7 +106,7 @@ export async function main(argv = process.argv): Promise<void> {
       const response = await fetch(`http://127.0.0.1:${DASHBOARD_PORT}/api/runs`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ mode, delayMs }),
+        body: JSON.stringify({ mode, delayMs, workingDirectory }),
       });
       if (!response.ok) throw new Error(`Could not start demo: ${await response.text()}`);
       const result = (await response.json()) as { runId: string };

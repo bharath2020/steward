@@ -1,7 +1,7 @@
-import { Client, Connection } from "@temporalio/client";
+import { Client, Connection, WorkflowExecutionAlreadyStartedError } from "@temporalio/client";
 import { randomBytes } from "node:crypto";
 import type {
-  AgentProvider,
+  RunMode,
   AgentRecoveryCommand,
   AgentRecoveryReceipt,
   HumanAnswerCommand,
@@ -11,13 +11,16 @@ import type {
   WorkflowRunInput,
 } from "./contracts";
 import { TASK_QUEUE, TEMPORAL_ADDRESS } from "./config";
+import { resolveWorkingDirectory } from "./repository-workspace";
 
 export interface StartOptions {
+  workingDirectory: string;
   definition: WorkflowDefinition;
   initialInput: JsonValue;
-  mode: AgentProvider;
+  mode: RunMode;
   delayMs?: number;
   runId?: string;
+  idempotent?: boolean;
 }
 
 export function createRunId(): string {
@@ -26,23 +29,32 @@ export function createRunId(): string {
 }
 
 export async function startWorkflow(options: StartOptions): Promise<{ runId: string; workflowId: string }> {
+  const workingDirectory = await resolveWorkingDirectory(options.workingDirectory);
   const runId = options.runId ?? createRunId();
   const connection = await Connection.connect({ address: TEMPORAL_ADDRESS });
   const client = new Client({ connection, namespace: "default" });
   const input: WorkflowRunInput = {
     runId,
+    execution: { workingDirectory, sandbox: "workspace-write" },
     definition: options.definition,
     initialInput: options.initialInput,
     mode: options.mode,
     delayMs: options.delayMs,
   };
   const workflowId = `yamlflow-${runId}`;
-  await client.workflow.start("stewardWorkflow", {
-    workflowId,
-    taskQueue: TASK_QUEUE,
-    args: [input],
-  });
-  await connection.close();
+  try {
+    // The saved intent owns the identity, including retries after completion.
+    await client.workflow.start("stewardWorkflow", {
+      workflowId,
+      ...(options.idempotent ? { workflowIdReusePolicy: "REJECT_DUPLICATE" as const } : {}),
+      taskQueue: TASK_QUEUE,
+      args: [input],
+    });
+  } catch (error) {
+    if (!options.idempotent || !(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
+  } finally {
+    await connection.close();
+  }
   return { runId, workflowId };
 }
 

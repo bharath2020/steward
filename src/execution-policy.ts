@@ -64,6 +64,7 @@ export function codexExecutionArgs(input: {
   outputPath: string;
   cwd: string;
   priorSessionId?: string;
+  sandbox?: "workspace-write";
 }): string[] {
   const common = [
     "--json",
@@ -76,7 +77,7 @@ export function codexExecutionArgs(input: {
   return input.priorSessionId
     ? [
         "--sandbox",
-        "read-only",
+        input.sandbox ?? "read-only",
         "exec",
         "resume",
         ...common,
@@ -86,7 +87,7 @@ export function codexExecutionArgs(input: {
     : [
         "exec",
         "--sandbox",
-        "read-only",
+        input.sandbox ?? "read-only",
         ...common,
         "--cd",
         input.cwd,

@@ -49,6 +49,13 @@ The control plane never calls `StepExecutor` to do workflow work. Only a schedul
 
 ## Module ownership
 
+ADR-022's current local slice keeps repository input canonicalization in
+`src/repository-workspace.ts`, called by the start client/CLI. The existing
+`src/activities.ts` and `src/execution-policy.ts` adapters consume the persisted
+binding for subprocess execution; `src/completion-receipt.ts` retains acceptance
+ownership. This is a bounded implementation in the current package, not a claim
+that every target module below has been extracted.
+
 Each module exposes a small public entry point. Internal files are private to that module. Interfaces are ordinary typed functions/objects; no dependency-injection framework or service locator is required.
 
 | Target path | Owns | Boundary |
@@ -235,3 +242,7 @@ Behavioral checks follow ownership: compiler golden plans/diagnostics; policy de
 Implement the roadmap's human-answer-to-agent slice through these interfaces first. Freeze its contracts before parallel work. Then extract executor protocol and commit/storage behavior, version scheduling only when an incompatible post-adoption change requires it, and connect CLI/web/TUI to the common read/control contracts. P0 fixes may remain narrowly in current files; this target layout must not delay them.
 
 For each substantive change, name the owning module and applicable ADR, identify the public contract affected, and verify no forbidden dependency was introduced. Add a module only when it owns a distinct decision or replaceable external boundary; do not split every function into its own service.
+
+### Current prepared-run use case
+
+`src/run-preparation.ts` owns catalog source restrictions, immutable preparation, and start-key binding (ADR-023). It calls the existing parser, repository validator, storage primitive, and client gateway. `src/server/index.ts` owns HTTP origin/body validation and response mapping. The interpreter alone selects a leaf provider in `workflow` mode; activities and completion receipts continue to operate on the actual provider. No provider execution or accepted-output decision moves into presentation or preparation.

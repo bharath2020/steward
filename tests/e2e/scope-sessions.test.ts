@@ -64,7 +64,7 @@ test("scope session policy reaches the external provider through real Temporal",
 
   async function execute(policy?: string, definition: object = source(policy), expectedCalls = 4, during?: (run: string) => Promise<void>, expectedReceipts = expectedCalls) {
     await writeFile(log, "");
-    const result = await h.cli("start", ["--workflow", await h.fixture(`sessions-${policy ?? "default"}.yaml`, YAML.stringify(definition)), "--mode", "codex"]);
+    const result = await h.cli("start", ["--working-directory", h.root, "--workflow", await h.fixture(`sessions-${policy ?? "default"}.yaml`, YAML.stringify(definition)), "--mode", "codex"]);
     const run = JSON.parse(result.stdout).runId as string;
     await during?.(run);
     const state = await h.state(run, state => ["completed", "failed"].includes(state.status));

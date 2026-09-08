@@ -120,7 +120,7 @@ test("scope loops through CLI and real Temporal", { timeout: 180_000 }, async t 
     });
     // A meaningful simulated work interval makes concurrency observable in the
     // persisted event order without relying on elapsed wall-clock assertions.
-    const started = await h.cli("start", ["--workflow", await h.fixture("scope-parallel.yaml", YAML.stringify(source)),
+    const started = await h.cli("start", ["--working-directory", h.root, "--workflow", await h.fixture("scope-parallel.yaml", YAML.stringify(source)),
       "--input", await h.fixture("scope-task.json", JSON.stringify({ task: "Resolve this test" })),
       "--mode", "simulated", "--delay-ms", "500"]);
     const run = JSON.parse(started.stdout).runId as string;

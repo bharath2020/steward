@@ -1,0 +1,110 @@
+{
+  "baseCommit": "318af0da2682c119045ef376f4c93e10ed5cba1c",
+  "nodeVersion": "22.23.2",
+  "codexVersion": "0.153.3",
+  "evidence": {
+    "live_codex": {
+      "root": "/var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-HqJ2Qv",
+      "runs": [
+        {
+          "runId": "2026-09-08T02-20-51-447Z-5acde1",
+          "temporalRunId": "01a07ed1-7593-7737-a56c-064703370708",
+          "status": "completed",
+          "execution": {
+            "workingDirectory": "/private/var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-HqJ2Qv/live-repository",
+            "sandbox": "workspace-write"
+          },
+          "receipts": [
+            {
+              "path": "/var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-HqJ2Qv/runs/2026-09-08T02-20-51-447Z-5acde1/nodes/repeat~2.writer/dispatches/recovery-0000-352de675-166e-4819-a079-39ba954452b6/completion-receipt.json",
+              "nodeId": "repeat~2.writer",
+              "receiptSha256": "209fcb77dc55883c8c1b00fa65e649f24d55b325c1f78c7dc8d2d2b84967f3e7",
+              "outputSha256": "2832ecc8c4f8baf5e4a38c335ad48af31335cdc1d90fa7146046067ec46111b8",
+              "execution": {
+                "workingDirectory": "/private/var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-HqJ2Qv/live-repository",
+                "sandbox": "workspace-write"
+              },
+              "providerSessionId": "01a07ed1-7b9b-7561-8cda-3f9d8c1b4bbd"
+            },
+            {
+              "path": "/var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-HqJ2Qv/runs/2026-09-08T02-20-51-447Z-5acde1/nodes/repeat~1.writer/dispatches/recovery-0000-8440fff3-01a0-49ba-ace0-a441e29b18f4/completion-receipt.json",
+              "nodeId": "repeat~1.writer",
+              "receiptSha256": "745170a9b4a5bebe997b1b4222b1eedca4bd4d49dd4f630569069f47354e7eaf",
+              "outputSha256": "9b4d989a3a074f3543d5af1fb8e51693f585132ac120aa6306af8b2ffd6cc667",
+              "execution": {
+                "workingDirectory": "/private/var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-HqJ2Qv/live-repository",
+                "sandbox": "workspace-write"
+              },
+              "providerSessionId": "01a07ed1-7b9b-7561-8cda-3f9d8c1b4bbd"
+            }
+          ]
+        }
+      ]
+    },
+    "controlled_recovery": {
+      "root": "/var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-yt37nt",
+      "runs": [
+        {
+          "runId": "2026-09-08T02-28-13-859Z-267422",
+          "temporalRunId": "01a07ed8-35be-79df-87c3-040968960fc9",
+          "status": "completed",
+          "execution": {
+            "workingDirectory": "/private/var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-yt37nt/original",
+            "sandbox": "workspace-write"
+          },
+          "receipts": [
+            {
+              "path": "/var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-yt37nt/runs/2026-09-08T02-28-13-859Z-267422/nodes/finish/dispatches/recovery-0000-f2aa285d-854b-41ec-b67a-6ce3395bd2c6/completion-receipt.json",
+              "nodeId": "finish",
+              "receiptSha256": "3bcf718869d748650044f64e090463e37ebf8460677573484d9a3f0e5328b3f1",
+              "outputSha256": "8e930cb12409c7788a32d6a562d49cd29d5bcaa894990edd7e8c02a29c727f07",
+              "execution": {
+                "workingDirectory": "/private/var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-yt37nt/original",
+                "sandbox": "workspace-write"
+              },
+              "providerSessionId": "session-finish"
+            },
+            {
+              "path": "/var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-yt37nt/runs/2026-09-08T02-28-13-859Z-267422/nodes/seed/dispatches/recovery-0000-f2d0f778-79e7-41b4-932d-c650d8fe63a6/completion-receipt.json",
+              "nodeId": "seed",
+              "receiptSha256": "8fbb9c5182a51cd6d2e53d18c60f003cf2c83820fcd5167efb2afb819256cd6a",
+              "outputSha256": "8e930cb12409c7788a32d6a562d49cd29d5bcaa894990edd7e8c02a29c727f07",
+              "execution": {
+                "workingDirectory": "/private/var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-yt37nt/original",
+                "sandbox": "workspace-write"
+              },
+              "providerSessionId": "session-seed"
+            }
+          ]
+        }
+      ]
+    },
+    "browser": {
+      "root": "/var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-xZxGHK",
+      "runs": [
+        {
+          "runId": "2026-09-08T02-29-47-583Z-fa69b2",
+          "temporalRunId": "01a07ed9-a3da-7bd3-990f-532abac58a1d",
+          "status": "completed",
+          "execution": {
+            "workingDirectory": "/private/var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-xZxGHK",
+            "sandbox": "workspace-write"
+          },
+          "receipts": [
+            {
+              "path": "/var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-xZxGHK/runs/2026-09-08T02-29-47-583Z-fa69b2/nodes/step/dispatches/recovery-0000-5b1bba27-1ef7-416e-92c8-cf0f3cc7a43e/completion-receipt.json",
+              "nodeId": "step",
+              "receiptSha256": "6487fc8e647949b87ebc367f977de001976fff059749322c00326147bfbb08d8",
+              "outputSha256": "48208f9428d64634bd8e28ff345bf0eab60d53c18fa2fbdb0b9bc1e84df2b5f6",
+              "execution": {
+                "workingDirectory": "/private/var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-xZxGHK",
+                "sandbox": "workspace-write"
+              },
+              "providerSessionId": "sim-2026-09-08T02-29-47-583Z-fa69b2-step"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

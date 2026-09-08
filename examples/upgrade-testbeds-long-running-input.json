@@ -1,0 +1,29 @@
+{
+  "targets": {
+    "rocket55": {
+      "repository": "/Users/bharath2020/Documents/projects/upgrade-testbeds/Rocket.Chat.ReactNative",
+      "app_directory": ".",
+      "platforms": [
+        "ios",
+        "android"
+      ]
+    },
+    "rocket56": {
+      "repository": "/Users/bharath2020/Documents/projects/upgrade-testbeds/Rocket.Chat.ReactNative-sdk56",
+      "app_directory": ".",
+      "platforms": [
+        "ios",
+        "android"
+      ]
+    },
+    "expo54": {
+      "repository": "/Users/bharath2020/Documents/projects/upgrade-testbeds/expo-monorepo-example",
+      "app_directory": "apps/example",
+      "platforms": [
+        "ios",
+        "android",
+        "web"
+      ]
+    }
+  }
+}

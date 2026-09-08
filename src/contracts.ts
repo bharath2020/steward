@@ -1,6 +1,8 @@
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 
+export type RunMode = AgentProvider | "workflow";
+
 export type AgentProvider = "simulated" | "codex";
 export type NodeKind = "agent" | "human" | "scope";
 export type OutputType =
@@ -103,11 +105,18 @@ export interface WorkflowDefinition {
   nodes: WorkflowNode[];
 }
 
+export interface RepositoryExecution {
+  workingDirectory: string;
+  sandbox: "workspace-write";
+}
+
 export interface WorkflowRunInput {
+  /** Absent only on histories created before repository-bound execution. */
+  execution?: RepositoryExecution;
   runId: string;
   definition: WorkflowDefinition;
   initialInput: JsonValue;
-  mode: AgentProvider;
+  mode: RunMode;
   delayMs?: number;
 }
 
@@ -238,12 +247,14 @@ export interface NodeRunState {
 }
 
 export interface RunState {
+  /** Absent only on histories created before repository-bound execution. */
+  execution?: RepositoryExecution;
   runId: string;
   temporalRunId: string;
   workflowName: string;
   definitionHash: string;
   sourcePath: string;
-  mode: AgentProvider;
+  mode: RunMode;
   status: RunStatus;
   startedAt: string;
   updatedAt: string;
@@ -257,11 +268,13 @@ export interface RunState {
 }
 
 export interface TransitionInput {
+  /** Absent only on histories created before repository-bound execution. */
+  execution?: RepositoryExecution;
   id: string;
   runId: string;
   temporalRunId: string;
   definition: WorkflowDefinition;
-  mode: AgentProvider;
+  mode: RunMode;
   initialInput: JsonValue;
   type: string;
   nodeId?: string;
@@ -271,6 +284,8 @@ export interface TransitionInput {
 }
 
 export interface AgentExecutionInput {
+  /** Absent only on histories created before repository-bound execution. */
+  execution?: RepositoryExecution;
   runId: string;
   temporalRunId: string;
   definition: WorkflowDefinition;
@@ -323,6 +338,8 @@ export interface AgentHeartbeatCheckpoint {
 }
 
 export interface AgentCompletionReceipt {
+  /** Absent only on histories created before repository-bound execution. */
+  execution?: RepositoryExecution;
   schema: "agent-completion-receipt.v1";
   receiptId: string;
   runId: string;

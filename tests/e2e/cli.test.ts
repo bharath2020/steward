@@ -19,7 +19,13 @@ test("consumer CLI end to end", { timeout: 360_000 }, async t => {
   t.after(() => h.stop());
   await h.start();
   await t.test("every shipped YAML has an explicit scenario", async () => {
-    assert.deepEqual((await readdir("workflows")).filter(file => file.endsWith(".yaml")).sort(), Object.keys(examples).sort());
+    assert.deepEqual((await readdir("workflows")).filter(file => file.endsWith(".yaml")).sort(), [...Object.keys(examples), "upgrade-testbeds-long-running.yaml"].sort());
+  });
+  await t.test("real testbed workflow validates without running platform commands", async () => {
+    const { loadWorkflow, loadInitialInput } = await import("../../src/definition");
+    const definition = await loadWorkflow("workflows/upgrade-testbeds-long-running.yaml");
+    await loadInitialInput("examples/upgrade-testbeds-long-running-input.json");
+    assert.equal(definition.nodes.length, 18);
   });
   for (const [file, input] of Object.entries(examples)) {
     await t.test(`bundled ${file}`, async () => {

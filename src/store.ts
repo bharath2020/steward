@@ -101,17 +101,19 @@ function dataObject(event: TimelineEvent): Record<string, JsonValue> {
 }
 
 export function rebuildState(
-  transition: Pick<TransitionInput, "runId" | "temporalRunId" | "definition" | "mode">,
+  transition: Pick<TransitionInput, "runId" | "temporalRunId" | "definition" | "mode" | "execution">,
   events: TimelineEvent[],
 ): RunState {
   const first = events[0];
+  const mode = events.some(event => event.type === "run.started" && dataObject(event).mode === "workflow") ? "workflow" : transition.mode;
   const state: RunState = {
     runId: transition.runId,
     temporalRunId: transition.temporalRunId,
     workflowName: transition.definition.name,
     definitionHash: transition.definition.definitionHash,
     sourcePath: transition.definition.sourcePath,
-    mode: transition.mode,
+    mode,
+    ...(transition.execution ? { execution: transition.execution } : {}),
     status: "running",
     startedAt: first?.at ?? new Date(0).toISOString(),
     updatedAt: first?.at ?? new Date(0).toISOString(),
@@ -124,7 +126,7 @@ export function rebuildState(
         {
           id: node.id,
           title: node.title,
-          agent: node.kind === "scope" ? "scope" : node.kind === "human" ? "human" : transition.mode,
+          agent: node.kind === "scope" ? "scope" : node.kind === "human" ? "human" : mode === "workflow" ? node.agent : mode,
           group: node.group,
           status: "pending",
           phase: "Waiting for dependencies",
@@ -154,7 +156,7 @@ export function rebuildState(
     if (event.type === "node.registered" && event.nodeId && !state.nodes[event.nodeId]) {
       state.nodes[event.nodeId] = {
         id: event.nodeId, title: String(data.title), definitionId: String(data.definitionId), parentId: String(data.parentId),
-        agent: data.kind === "scope" ? "scope" : data.kind === "human" ? "human" : transition.mode,
+        agent: data.kind === "scope" ? "scope" : data.kind === "human" ? "human" : mode === "workflow" ? (data.agent === "codex" ? "codex" : "simulated") : mode,
         needs: data.needs as string[], status: "pending", phase: "Waiting for dependencies",
       };
       state.totalCount += 1;
@@ -162,6 +164,12 @@ export function rebuildState(
     const node = event.nodeId ? state.nodes[event.nodeId] : undefined;
     if (node && ["condition_met", "exhausted_accepted", "exhausted_failed"].includes(String(data.loopOutcome))) node.loopOutcome = data.loopOutcome as NonNullable<typeof node.loopOutcome>;
     switch (event.type) {
+      case "run.started":
+        if (data.execution && typeof data.execution === "object" && !Array.isArray(data.execution)
+          && typeof data.execution.workingDirectory === "string" && data.execution.sandbox === "workspace-write") {
+          state.execution = { workingDirectory: data.execution.workingDirectory, sandbox: "workspace-write" };
+        }
+        break;
       case "node.started":
         if (node) {
           node.status = "running";
@@ -368,5 +376,6 @@ export async function initializeRun(
   await mkdir(join(directory, "nodes"), { recursive: true });
   await atomicJson(join(directory, "definition.json"), definition);
   await atomicJson(join(directory, "input.json"), initialInput);
+  if (input.execution) await atomicJson(join(directory, "execution.json"), input.execution);
   return recordTransition(input);
 }

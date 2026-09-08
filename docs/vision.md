@@ -47,6 +47,8 @@ For example, a repository review can run independent analyses, wait for their co
 
 **Later, when justified:** richer nested control blocks, more executors, portable sessions, and explicitly governed write operations. Hierarchical language work is separated from the first hardening release so it cannot hold basic correctness fixes hostage.
 
+ADR-022 brings forward bounded local workspace writes for coding/build workflows: every new run names its repository explicitly. Broader external effects and portable sessions remain later work.
+
 Public multi-tenant SaaS, billing, an executor marketplace, arbitrary workflow code, unrestricted autonomous repository changes, dynamic unbounded graphs, and promises of exactly-once external effects are outside the initial scope. New scope needs a concrete user problem and a decision record explaining the added operating burden.
 
 ## How we measure progress

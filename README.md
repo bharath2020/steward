@@ -119,16 +119,16 @@ To start a **new** example with one click, open a launcher in `examples/`:
 | [Run Privacy Launch.command](examples/Run%20Privacy%20Launch.command) | Human clarification before privacy launch research |
 | [Run File Prompt.command](examples/Run%20File%20Prompt.command) | A small agent assignment loaded from a Markdown file |
 
-These launchers use the simulated provider. They never answer human gates for you.
+These launchers use the simulated provider and request a repository working directory before a new run. They never answer human gates for you. Plain setup without a directory opens the Console without submitting a first run.
 
 Terminal equivalents:
 
 ```bash
 npm run setup
-npm run setup -- --example questions --new-run
-npm run setup -- --example product --new-run
-npm run setup -- --example privacy --new-run
-npm run setup -- --example file --new-run
+npm run setup -- --working-directory /path/to/repository --example questions --new-run
+npm run setup -- --working-directory /path/to/repository --example product --new-run
+npm run setup -- --working-directory /path/to/repository --example privacy --new-run
+npm run setup -- --working-directory /path/to/repository --example file --new-run
 npm run setup -- --check        # Install/check dependencies and validate; no services or runs
 ```
 
@@ -147,7 +147,7 @@ git clone https://github.com/bharath2020/steward.git
 cd steward
 npm ci
 npm run verify
-npm run demo
+npm run demo -- --working-directory /path/to/repository
 ```
 
 Open [http://127.0.0.1:4310](http://127.0.0.1:4310). Temporal's local history UI is at [http://127.0.0.1:8233](http://127.0.0.1:8233).
@@ -177,10 +177,16 @@ The demo protects process, worker, launcher, browser-network, and same-disk proj
 ## Run real Codex workers
 
 ```bash
-npm run start -- --workflow workflows/product-launch.yaml --input examples/product-input.json --mode codex
+npm run start -- --working-directory /path/to/repository --workflow workflows/product-launch.yaml --input examples/product-input.json --mode codex
 ```
 
-The worker adapter uses `codex exec --json --sandbox read-only --output-schema ... --output-last-message ...`, or `codex exec resume` when a matching session checkpoint exists. Existing Codex CLI authentication is reused. Each agent is bounded to one node, cannot write to the repository, and must return the node's JSON shape. Only completed `agent_message` items from the Codex JSONL stream are persisted to `nodes/<node-id>/messages.jsonl`; reasoning, command, tool, and lifecycle events remain out of the selected-node transcript.
+Every new run requires an existing repository directory: CLI `--working-directory`, HTTP `workingDirectory`, or the Console Working directory field. Relative CLI paths resolve from the calling directory; symlinks resolve to their canonical target before start. The selected directory is persisted in Temporal input, `execution.json`, run state, and hashed agent receipts. All nodes share that directory.
+
+The worker adapter uses `codex exec --json --sandbox workspace-write --cd <repository> --output-schema ... --output-last-message ...`, or `codex exec resume` from the same recorded directory. Existing Codex CLI authentication is reused. Workers may edit files for their assigned node and must return its JSON shape. Historical runs without a repository binding retain read-only execution; restarting them does not silently grant writes. Authoring chat remains read-only. Only completed `agent_message` items from the Codex JSONL stream are persisted to `nodes/<node-id>/messages.jsonl`; reasoning, command, tool, and lifecycle events remain out of the selected-node transcript.
+
+Build caches, devices and network access remain subject to the installed sandbox and host policy. Retries preserve workspace identity but do not roll back edits or guarantee exactly-once shell execution. HTTP starts require a local JSON request; browser starts must come from the same Console origin.
+
+Run `npm run test:e2e:workspace` for isolated Temporal tests of required directories, workspace writes, and restart/retry behavior. Set `STEWARD_PLAYWRIGHT_MODULE` to a Playwright installation to include the browser test. `STEWARD_TEST_CODEX_SANDBOX=1` enables the installed CLI sandbox probe; `STEWARD_TEST_LIVE_CODEX=1` enables an authenticated live provider write/resume smoke (uses provider quota). These opt-in checks are reported as skipped when not selected. See [validation evidence](docs/validation/repository-execution-2026-09-07.md).
 
 ## Multiple-choice questions from two agents
 
@@ -267,7 +273,7 @@ File and inline prompts are literal assignment text. Neither interpolates `{{var
 Try the [file prompt example](workflows/file-prompt.yaml):
 
 ```bash
-npm run start -- --workflow workflows/file-prompt.yaml --input examples/product-input.json --mode simulated
+npm run start -- --working-directory /path/to/repository --workflow workflows/file-prompt.yaml --input examples/product-input.json --mode simulated
 ```
 
 This command requires a running Temporal server and Steward worker, as with the other examples.
@@ -293,7 +299,7 @@ An agent node can consume an array as a bounded queue with `for_each`:
 Try the [queued fan-out example](workflows/queued-fan-out.yaml):
 
 ```bash
-npm run start -- --workflow workflows/queued-fan-out.yaml --input examples/queued-fan-out-input.json --mode simulated
+npm run start -- --working-directory /path/to/repository --workflow workflows/queued-fan-out.yaml --input examples/queued-fan-out-input.json --mode simulated
 ```
 
 Groups apply per-group parallelism limits while preserving the global cap. Loops are deliberately bounded to 20 iterations and support `equals`, `not_equals`, numeric comparisons, `contains`, and `truthy`. A downstream fan-in sees only the final accepted loop output.
@@ -307,3 +313,15 @@ Run `npm run verify` for typechecking and unit tests. `npm run test:e2e` exercis
 The [CI workflow](.github/workflows/ci.yml) checks Node 22 and 24 and runs a separate simulated recovery job. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, ownership boundaries, and validation expectations. Runtime history, credentials, local agent configuration, and generated test output are excluded from Git.
 
 Steward was developed under the working name YAMLFlow, so some local configuration, execution IDs, task queues, and schema identifiers retain that spelling. All new definitions use the single `stewardWorkflow` Temporal type and `executeAgent` Activity. Pre-adoption `yamlAgentWorkflow*` histories and artifacts are preserved but are not registered or replayable by the current worker; see ADR-016.
+
+### Dashboard workflow selection
+
+Set `YAMLFLOW_CATALOG` to a JSON catalog before starting the dashboard:
+
+```json
+{"workflows":[{"id":"launch","name":"Product launch","workflow":"workflows/product-launch.yaml","input":"examples/product-input.json","allowedRoots":["."]}]}
+```
+
+Paths resolve relative to the catalog file. Allowed roots cover YAML, example input, and prompt files. Select **Workflow**, edit **Input JSON**, enter the required **Working directory**, choose **Execution mode**, then **Validate and preview** and **Start new run**. Simulation uses fixtures; Workflow providers uses each node's declared provider; Real Codex retains the global override. Browsing history preserves your draft. A preview freezes its sources and input; changes to the draft require another preview. Retrying a prepared start reuses its saved run identity.
+
+Browser acceptance tests require Chromium: run `npx playwright install chromium`, then `npm run test:e2e`. Playwright is a development dependency; `STEWARD_PLAYWRIGHT_MODULE` can optionally select an already-installed module. Tests use isolated Temporal data and a controlled provider executable, without paid model calls.

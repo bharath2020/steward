@@ -1,0 +1,390 @@
+version: 1
+name: upgrade-testbeds-long-running
+description: Real TypeScript -> per-platform build -> per-platform test across
+  three testbeds. Start with upgrade-testbeds as the required working directory;
+  report missing build and device prerequisites as blocked.
+defaults:
+  provider: codex
+  max_parallelism: 3
+  retry:
+    maximum_attempts: 2
+groups:
+  ios:
+    title: Shared iOS simulator/build lane
+    max_parallelism: 1
+  android:
+    title: Shared Android emulator/build lane
+    max_parallelism: 1
+  web:
+    title: Web lane
+    max_parallelism: 1
+nodes:
+  rocket55_typescript:
+    title: "rocket55: all typescript"
+    agent: codex
+    inputs:
+      target: $input.targets.rocket55
+      phase: typescript
+      platform: all
+    prompt_file: prompts/upgrade-testbeds-gate.md
+    outputs: &a1
+      passed: boolean
+      status: string
+      repository: string
+      revision: string
+      phase: string
+      platform: string
+      commands: string[]
+      exit_codes: number[]
+      started_at: string
+      finished_at: string
+      evidence: object[]
+      blockers: string[]
+    loop:
+      max_iterations: 1
+      until:
+        path: passed
+        operator: equals
+        value: true
+      on_exhaustion: fail
+  rocket55_ios_build:
+    title: "rocket55: ios build"
+    agent: codex
+    group: ios
+    needs:
+      - rocket55_typescript
+    inputs:
+      target: $input.targets.rocket55
+      phase: build
+      platform: ios
+      predecessor: $nodes.rocket55_typescript.output
+    prompt_file: prompts/upgrade-testbeds-gate.md
+    outputs: *a1
+    loop:
+      max_iterations: 1
+      until:
+        path: passed
+        operator: equals
+        value: true
+      on_exhaustion: fail
+  rocket55_ios_test:
+    title: "rocket55: ios test"
+    agent: codex
+    group: ios
+    needs:
+      - rocket55_ios_build
+    inputs:
+      target: $input.targets.rocket55
+      phase: test
+      platform: ios
+      predecessor: $nodes.rocket55_ios_build.output
+    prompt_file: prompts/upgrade-testbeds-gate.md
+    outputs: *a1
+    loop:
+      max_iterations: 1
+      until:
+        path: passed
+        operator: equals
+        value: true
+      on_exhaustion: fail
+  rocket55_android_build:
+    title: "rocket55: android build"
+    agent: codex
+    group: android
+    needs:
+      - rocket55_typescript
+    inputs:
+      target: $input.targets.rocket55
+      phase: build
+      platform: android
+      predecessor: $nodes.rocket55_typescript.output
+    prompt_file: prompts/upgrade-testbeds-gate.md
+    outputs: *a1
+    loop:
+      max_iterations: 1
+      until:
+        path: passed
+        operator: equals
+        value: true
+      on_exhaustion: fail
+  rocket55_android_test:
+    title: "rocket55: android test"
+    agent: codex
+    group: android
+    needs:
+      - rocket55_android_build
+    inputs:
+      target: $input.targets.rocket55
+      phase: test
+      platform: android
+      predecessor: $nodes.rocket55_android_build.output
+    prompt_file: prompts/upgrade-testbeds-gate.md
+    outputs: *a1
+    loop:
+      max_iterations: 1
+      until:
+        path: passed
+        operator: equals
+        value: true
+      on_exhaustion: fail
+  rocket56_typescript:
+    title: "rocket56: all typescript"
+    agent: codex
+    inputs:
+      target: $input.targets.rocket56
+      phase: typescript
+      platform: all
+    prompt_file: prompts/upgrade-testbeds-gate.md
+    outputs: *a1
+    loop:
+      max_iterations: 1
+      until:
+        path: passed
+        operator: equals
+        value: true
+      on_exhaustion: fail
+  rocket56_ios_build:
+    title: "rocket56: ios build"
+    agent: codex
+    group: ios
+    needs:
+      - rocket56_typescript
+    inputs:
+      target: $input.targets.rocket56
+      phase: build
+      platform: ios
+      predecessor: $nodes.rocket56_typescript.output
+    prompt_file: prompts/upgrade-testbeds-gate.md
+    outputs: *a1
+    loop:
+      max_iterations: 1
+      until:
+        path: passed
+        operator: equals
+        value: true
+      on_exhaustion: fail
+  rocket56_ios_test:
+    title: "rocket56: ios test"
+    agent: codex
+    group: ios
+    needs:
+      - rocket56_ios_build
+    inputs:
+      target: $input.targets.rocket56
+      phase: test
+      platform: ios
+      predecessor: $nodes.rocket56_ios_build.output
+    prompt_file: prompts/upgrade-testbeds-gate.md
+    outputs: *a1
+    loop:
+      max_iterations: 1
+      until:
+        path: passed
+        operator: equals
+        value: true
+      on_exhaustion: fail
+  rocket56_android_build:
+    title: "rocket56: android build"
+    agent: codex
+    group: android
+    needs:
+      - rocket56_typescript
+    inputs:
+      target: $input.targets.rocket56
+      phase: build
+      platform: android
+      predecessor: $nodes.rocket56_typescript.output
+    prompt_file: prompts/upgrade-testbeds-gate.md
+    outputs: *a1
+    loop:
+      max_iterations: 1
+      until:
+        path: passed
+        operator: equals
+        value: true
+      on_exhaustion: fail
+  rocket56_android_test:
+    title: "rocket56: android test"
+    agent: codex
+    group: android
+    needs:
+      - rocket56_android_build
+    inputs:
+      target: $input.targets.rocket56
+      phase: test
+      platform: android
+      predecessor: $nodes.rocket56_android_build.output
+    prompt_file: prompts/upgrade-testbeds-gate.md
+    outputs: *a1
+    loop:
+      max_iterations: 1
+      until:
+        path: passed
+        operator: equals
+        value: true
+      on_exhaustion: fail
+  expo54_typescript:
+    title: "expo54: all typescript"
+    agent: codex
+    inputs:
+      target: $input.targets.expo54
+      phase: typescript
+      platform: all
+    prompt_file: prompts/upgrade-testbeds-gate.md
+    outputs: *a1
+    loop:
+      max_iterations: 1
+      until:
+        path: passed
+        operator: equals
+        value: true
+      on_exhaustion: fail
+  expo54_ios_build:
+    title: "expo54: ios build"
+    agent: codex
+    group: ios
+    needs:
+      - expo54_typescript
+    inputs:
+      target: $input.targets.expo54
+      phase: build
+      platform: ios
+      predecessor: $nodes.expo54_typescript.output
+    prompt_file: prompts/upgrade-testbeds-gate.md
+    outputs: *a1
+    loop:
+      max_iterations: 1
+      until:
+        path: passed
+        operator: equals
+        value: true
+      on_exhaustion: fail
+  expo54_ios_test:
+    title: "expo54: ios test"
+    agent: codex
+    group: ios
+    needs:
+      - expo54_ios_build
+    inputs:
+      target: $input.targets.expo54
+      phase: test
+      platform: ios
+      predecessor: $nodes.expo54_ios_build.output
+    prompt_file: prompts/upgrade-testbeds-gate.md
+    outputs: *a1
+    loop:
+      max_iterations: 1
+      until:
+        path: passed
+        operator: equals
+        value: true
+      on_exhaustion: fail
+  expo54_android_build:
+    title: "expo54: android build"
+    agent: codex
+    group: android
+    needs:
+      - expo54_typescript
+    inputs:
+      target: $input.targets.expo54
+      phase: build
+      platform: android
+      predecessor: $nodes.expo54_typescript.output
+    prompt_file: prompts/upgrade-testbeds-gate.md
+    outputs: *a1
+    loop:
+      max_iterations: 1
+      until:
+        path: passed
+        operator: equals
+        value: true
+      on_exhaustion: fail
+  expo54_android_test:
+    title: "expo54: android test"
+    agent: codex
+    group: android
+    needs:
+      - expo54_android_build
+    inputs:
+      target: $input.targets.expo54
+      phase: test
+      platform: android
+      predecessor: $nodes.expo54_android_build.output
+    prompt_file: prompts/upgrade-testbeds-gate.md
+    outputs: *a1
+    loop:
+      max_iterations: 1
+      until:
+        path: passed
+        operator: equals
+        value: true
+      on_exhaustion: fail
+  expo54_web_build:
+    title: "expo54: web build"
+    agent: codex
+    group: web
+    needs:
+      - expo54_typescript
+    inputs:
+      target: $input.targets.expo54
+      phase: build
+      platform: web
+      predecessor: $nodes.expo54_typescript.output
+    prompt_file: prompts/upgrade-testbeds-gate.md
+    outputs: *a1
+    loop:
+      max_iterations: 1
+      until:
+        path: passed
+        operator: equals
+        value: true
+      on_exhaustion: fail
+  expo54_web_test:
+    title: "expo54: web test"
+    agent: codex
+    group: web
+    needs:
+      - expo54_web_build
+    inputs:
+      target: $input.targets.expo54
+      phase: test
+      platform: web
+      predecessor: $nodes.expo54_web_build.output
+    prompt_file: prompts/upgrade-testbeds-gate.md
+    outputs: *a1
+    loop:
+      max_iterations: 1
+      until:
+        path: passed
+        operator: equals
+        value: true
+      on_exhaustion: fail
+  report:
+    agent: codex
+    title: Summarize committed platform evidence
+    needs:
+      - rocket55_ios_test
+      - rocket55_android_test
+      - rocket56_ios_test
+      - rocket56_android_test
+      - expo54_ios_test
+      - expo54_android_test
+      - expo54_web_test
+    inputs:
+      rocket55_ios_test: $nodes.rocket55_ios_test.output
+      rocket55_android_test: $nodes.rocket55_android_test.output
+      rocket56_ios_test: $nodes.rocket56_ios_test.output
+      rocket56_android_test: $nodes.rocket56_android_test.output
+      expo54_ios_test: $nodes.expo54_ios_test.output
+      expo54_android_test: $nodes.expo54_android_test.output
+      expo54_web_test: $nodes.expo54_web_test.output
+    prompt: Summarize only the supplied committed test results. Return passed true
+      only if every platform passed with real evidence. List evidence paths. Do
+      not claim durability or restart recovery was tested from build/test
+      results alone; that needs independent Temporal history and artifact
+      comparison from the operator checklist.
+    outputs:
+      passed: boolean
+      summary: string
+      evidence_paths: string[]
+      durability_verified: boolean

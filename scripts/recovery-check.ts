@@ -99,6 +99,7 @@ async function startRun(
 ): Promise<string> {
   const { stdout } = await execute(process.execPath, [
     "--import", "tsx", "src/start.ts",
+    "--working-directory", process.cwd(),
     "--workflow", workflowPath,
     "--input", inputPath,
     "--mode", "simulated",

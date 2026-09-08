@@ -25,10 +25,15 @@
         </label>
       </div>
       <div class="run-controls">
+        <label class="working-directory-control">
+          <span>Working directory</span>
+          <input id="working-directory" type="text" required placeholder="/path/to/repository" spellcheck="false" />
+        </label>
         <label>
-          <span>Runner</span>
-          <select id="mode">
+          <span>Execution mode</span>
+          <select id="mode" aria-label="Execution mode">
             <option value="simulated">Simulated</option>
+            <option value="workflow">Workflow providers</option>
             <option value="codex">Real Codex</option>
           </select>
         </label>

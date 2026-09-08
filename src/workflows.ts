@@ -66,6 +66,7 @@ function baseTransition(
     definition: run.definition,
     mode: run.mode,
     initialInput: run.initialInput,
+    ...(run.execution ? { execution: run.execution } : {}),
     type,
     message,
     ...extras,
@@ -169,6 +170,7 @@ export async function stewardWorkflow(run: WorkflowRunInput): Promise<Record<str
         definitionHash: run.definition.definitionHash,
         mode: run.mode,
         workflowType: "stewardWorkflow",
+        ...(run.execution ? { execution: { ...run.execution } } : {}),
       },
     }),
   );
@@ -376,9 +378,10 @@ export async function stewardWorkflow(run: WorkflowRunInput): Promise<Record<str
             runId: run.runId,
             temporalRunId,
             definition: run.definition,
+            ...(run.execution ? { execution: run.execution } : {}),
             node,
             input,
-            mode: run.mode,
+            mode: run.mode === "workflow" ? node.agent : run.mode,
             delayMs: run.delayMs,
             wave: nodeWave,
             iteration: executionIteration,
@@ -554,7 +557,7 @@ export async function stewardWorkflow(run: WorkflowRunInput): Promise<Record<str
         const instance = instances[child.id];
         await administrative.recordTransition(baseTransition(run, temporalRunId, `${run.runId}:${instance.id}:registered`, "node.registered", `${child.title} entered scope ${node.title}`, {
           nodeId: instance.id, wave: nodeWave,
-          data: { title: child.title, kind: child.kind, definitionId: child.id, parentId: node.id, needs: instance.needs },
+          data: { ...(run.mode === "workflow" ? { agent: child.agent } : {}), title: child.title, kind: child.kind, definitionId: child.id, parentId: node.id, needs: instance.needs },
         }));
       }
       while (localCompleted.size < children.length) {

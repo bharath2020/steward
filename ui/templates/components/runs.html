@@ -1,4 +1,15 @@
       <aside class="run-rail" aria-label="Runs">
+        <details class="run-composer" open>
+          <summary>New run</summary>
+          <label for="workflow-picker">Workflow</label>
+          <select id="workflow-picker"></select>
+          <label for="input-json">Input JSON</label>
+          <textarea id="input-json" rows="5" spellcheck="false"></textarea>
+          <button id="prepare-run" type="button">Validate and preview</button>
+          <section id="workflow-preview" role="region" aria-label="Workflow preview" hidden><pre></pre></section>
+          <button id="start-prepared" type="button" disabled>Start new run</button>
+          <p id="prepare-status" role="status"></p>
+        </details>
         <div class="section-heading">
           <div>
             <span class="eyebrow">History</span>
