@@ -1,0 +1,173 @@
+TAP version 13
+# E2E evidence: /var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-pLCI6D
+# Subtest: proposed dashboard picker through real browser, HTTP, Temporal and provider boundary
+    # Subtest: healthy baseline starts configured workflow through existing HTTP and commits simulated evidence
+    ok 1 - healthy baseline starts configured workflow through existing HTTP and commits simulated evidence
+      ---
+      duration_ms: 805.228542
+      type: 'test'
+      ...
+# Browser evidence: /var/folders/1c/wkzr1t1945v0tg_882wwqshh0000gn/T/steward-cli-e2e-pLCI6D/dashboard-before-picker.png
+    # Subtest: browser presents workflow selection and starts the reviewed chosen input in simulation
+    not ok 2 - browser presents workflow selection and starts the reviewed chosen input in simulation
+      ---
+      duration_ms: 2.706875
+      type: 'test'
+      location: '/Users/bharath2020/Documents/projects/steward/tests/e2e/dashboard-workflow-picker.test.ts:10:5873'
+      failureType: 'testCodeFailure'
+      error: |-
+        Dashboard must expose an accessible Workflow picker
+
+        0 !== 1
+
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 1
+      actual: 0
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (/Users/bharath2020/Documents/projects/steward/tests/e2e/dashboard-workflow-picker.test.ts:134:12)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (/Users/bharath2020/Documents/projects/steward/tests/e2e/dashboard-workflow-picker.test.ts:132:3)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: catalog selection and reviewed data are bound to the accepted start
+    not ok 3 - catalog selection and reviewed data are bound to the accepted start
+      ---
+      duration_ms: 3.054875
+      type: 'test'
+      location: '/Users/bharath2020/Documents/projects/steward/tests/e2e/dashboard-workflow-picker.test.ts:10:7043'
+      failureType: 'testCodeFailure'
+      error: |-
+        {"status":404,"body":{"text":"Not found"}}
+
+        404 !== 200
+
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 200
+      actual: 404
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (/Users/bharath2020/Documents/projects/steward/tests/e2e/dashboard-workflow-picker.test.ts:151:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (/Users/bharath2020/Documents/projects/steward/tests/e2e/dashboard-workflow-picker.test.ts:149:3)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: workflow mode dispatches each declared provider while simulation overrides it
+    not ok 4 - workflow mode dispatches each declared provider while simulation overrides it
+      ---
+      duration_ms: 3.182
+      type: 'test'
+      location: '/Users/bharath2020/Documents/projects/steward/tests/e2e/dashboard-workflow-picker.test.ts:10:7834'
+      failureType: 'testCodeFailure'
+      error: |-
+        Proposed prepare contract: {"status":404,"body":{"text":"Not found"}}
+
+        404 !== 200
+
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 200
+      actual: 404
+      operator: 'strictEqual'
+      stack: |-
+        prepare (/Users/bharath2020/Documents/projects/steward/tests/e2e/dashboard-workflow-picker.test.ts:100:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async TestContext.<anonymous> (/Users/bharath2020/Documents/projects/steward/tests/e2e/dashboard-workflow-picker.test.ts:164:22)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (/Users/bharath2020/Documents/projects/steward/tests/e2e/dashboard-workflow-picker.test.ts:162:3)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: invalid input preflight has actionable error and starts no durable work
+    not ok 5 - invalid input preflight has actionable error and starts no durable work
+      ---
+      duration_ms: 2.547166
+      type: 'test'
+      location: '/Users/bharath2020/Documents/projects/steward/tests/e2e/dashboard-workflow-picker.test.ts:10:8366'
+      failureType: 'testCodeFailure'
+      error: |-
+        {"status":404,"body":{"text":"Not found"}}
+
+        404 !== 400
+
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 400
+      actual: 404
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (/Users/bharath2020/Documents/projects/steward/tests/e2e/dashboard-workflow-picker.test.ts:176:12)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (/Users/bharath2020/Documents/projects/steward/tests/e2e/dashboard-workflow-picker.test.ts:172:3)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: an unknown prepared intent cannot silently start the configured workflow
+    not ok 6 - an unknown prepared intent cannot silently start the configured workflow
+      ---
+      duration_ms: 1336.327667
+      type: 'test'
+      location: '/Users/bharath2020/Documents/projects/steward/tests/e2e/dashboard-workflow-picker.test.ts:10:8890'
+      failureType: 'testCodeFailure'
+      error: 'Unknown prepared intent requires a validation error, not fallback or server failure: {"status":202,"body":{"runId":"2026-09-08T00-24-19-468Z-a31ef9","workflowId":"yamlflow-2026-09-08T00-24-19-468Z-a31ef9"}}'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: '=='
+      stack: |-
+        TestContext.<anonymous> (/Users/bharath2020/Documents/projects/steward/tests/e2e/dashboard-workflow-picker.test.ts:187:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (/Users/bharath2020/Documents/projects/steward/tests/e2e/dashboard-workflow-picker.test.ts:182:3)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: history browsing preserves the separate unstarted workflow and input selection
+    not ok 7 - history browsing preserves the separate unstarted workflow and input selection
+      ---
+      duration_ms: 20.857666
+      type: 'test'
+      location: '/Users/bharath2020/Documents/projects/steward/tests/e2e/dashboard-workflow-picker.test.ts:10:9567'
+      failureType: 'testCodeFailure'
+      error: |-
+        History and draft workflow selection require separate state
+
+        0 !== 1
+
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 1
+      actual: 0
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (/Users/bharath2020/Documents/projects/steward/tests/e2e/dashboard-workflow-picker.test.ts:195:12)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (/Users/bharath2020/Documents/projects/steward/tests/e2e/dashboard-workflow-picker.test.ts:192:3)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    1..7
+not ok 1 - proposed dashboard picker through real browser, HTTP, Temporal and provider boundary
+  ---
+  duration_ms: 5077.969875
+  type: 'test'
+  location: '/Users/bharath2020/Documents/projects/steward/tests/e2e/dashboard-workflow-picker.test.ts:2:1565'
+  failureType: 'subtestsFailed'
+  error: '6 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..1
+# tests 8
+# suites 0
+# pass 1
+# fail 7
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5360.062292

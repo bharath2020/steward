@@ -1,0 +1,36 @@
+# Dashboard workflow picker: code review
+
+Date: 2026-09-07. Scope: current dashboard, server, shared start and provider dispatch, plus proposed acceptance tests. No picker implementation exists yet. This review separates existing defects from missing behavior in the [feature proposal](../features/dashboard-workflow-picker.md). Uncommitted installer changes are excluded. No production source was edited.
+
+## Current defect
+
+**P2 — Reject malformed or non-object request JSON as a client error.** At [src/server/index.ts:89](../../src/server/index.ts#L89), `body()` casts arbitrary parsed JSON to a record without runtime validation. `POST /api/runs` dereferences it at line 173; the error classifier at lines 239–248 maps both parser errors and the resulting null dereference to HTTP 500. A malformed input submission therefore appears to be a server failure instead of an actionable validation rejection. Parse failures should produce a client validation error, and command envelopes should be checked as non-null objects before accessing fields. This does not imply that a workflow's nested initial-input value must itself always be an object.
+
+Reproduced against an ephemeral instance of the actual dashboard server on a loopback port:
+
+| Request body to `POST /api/runs` | Observed status | Observed error |
+|---|---|---|
+| `{` | 500 | `Expected property name or '}' in JSON at position 1 (line 1 column 2)` |
+| `null` | 500 | `Cannot read properties of null (reading 'mode')` |
+
+The probe started no workflow and closed the temporary server. Initial sandbox execution failed at socket binding with `listen EPERM`; the permitted loopback rerun completed with exit 0 and reproduced both responses. These are HTTP observations, not simulated assertions. Unsupported non-null mode strings already receive HTTP 400 at lines 174–176; no arbitrary-provider acceptance defect was found there.
+
+## Proposed acceptance gaps, not regressions
+
+1. **Selection and prepared input have no current API.** [src/server/index.ts:171–185](../../src/server/index.ts#L171) always loads the configured workflow/input paths. Extra selection, input, or prepared-start fields are ignored. A new client must not send such fields to this legacy endpoint and assume they took effect: it can receive 202 for the configured workflow instead. The proposed catalog/prepare endpoints and exact request shapes are provisional test contracts, not already adopted public APIs.
+2. **Declared-provider execution requires a runtime change.** [src/workflows.ts:375–382](../../src/workflows.ts#L375) passes `run.mode` to each agent Activity even though [src/definition.ts:233](../../src/definition.ts#L233) retains each agent's declared provider. That is the existing explicit global-mode behavior, not a new bug. The proposed “Use workflow providers” option must implement effective per-node routing and preserve old run semantics; a toolbar-only change would execute the wrong providers for mixed declarations.
+3. **Transport retries are not bound to one start intent.** [src/client.ts:29](../../src/client.ts#L29) generates a fresh run ID when omitted; the HTTP route never supplies one. [ui/assets/app.js:774–795](../../ui/assets/app.js#L774) disables the button during a request but reenables it after a lost response. Repeating Start can create another workflow even if the first was accepted. The proposal's reviewed start identity and reconciliation are missing; disabling the button alone does not meet that acceptance criterion.
+4. **“Run again” does not use the inspected historical run.** [ui/assets/app.js:778–781](../../ui/assets/app.js#L778) sends only mode and pace. Viewing history changes the SSE selection at lines 135–139, while the server still loads current configured files. The current label can be misleading when inspecting a different workflow. The proposed “New run from this run” requires explicit snapshot/input prefill and review, separate from opening the latest catalog version. History navigation itself does not start work.
+5. **Catalog containment and review binding are new boundaries.** [src/definition.ts:434–462](../../src/definition.ts#L434) supports trusted local YAML and resolves relative or absolute prompt-file paths. This is existing CLI functionality, not an arbitrary browser-upload vulnerability. A catalog adapter must authorize sources and dependencies, including canonical symlink resolution, before extending browser selection. It must retain the loader's immutable prompt contents and bind the reviewed snapshot to start rather than reread mutable files silently.
+
+These gaps are bounded to the requested picker; they do not justify claiming the full production control-plane redesign is required. Existing Temporal scheduling, output acceptance, qualified human/recovery controls, and loop evaluation should remain with their current owners.
+
+## Test review
+
+Reviewed [dashboard-workflow-picker.test.ts](../../tests/e2e/dashboard-workflow-picker.test.ts). It uses an isolated real Temporal service, the actual dashboard HTTP server, and headless Chromium. Its first passing baseline starts the configured workflow through HTTP, reconciles Temporal completion, and checks saved definition/input and hash-bound receipt evidence. The fake Codex executable is isolated through the test worker's PATH; no paid provider is invoked.
+
+The initial execution had one passing baseline and six failing acceptance subtests (the parent is also counted as failed by Node's reporter). Browser selection/history tests fail on the absent accessible Workflow picker. Catalog and prepare tests fail on missing HTTP routes. The independent unknown-prepared-intent test reaches the existing start route, observes 202, and reconciles the incorrectly selected configured workflow to completion before failing. These failures are expected feature gaps, not infrastructure failures. Assertions beyond missing prepare—especially declared-provider dispatch—have not executed successfully and provide no live-provider qualification.
+
+Review feedback corrected two weaknesses in the test source: unknown prepared intents must receive a client validation response with an actionable error, rather than merely any response other than 202; receipts are now checked against both the durable node output and accepted `output.json`, not just their own hashes. Exact API names, catalog environment shape, and UI labels are explicitly provisional in the file header. These tests cover an initial feature slice, not every criterion in the report: start replay/reconciliation, source mutation/containment, nested human gates, and loop exhaustion still require dedicated picker acceptance coverage when implemented.
+
+Playwright/Chromium are additional test prerequisites and are not repository package dependencies. Reproduction must supply an installed module through `STEWARD_PLAYWRIGHT_MODULE` or install it in the environment; without that prerequisite a missing-module failure is not a feature RED. The new file participates in the default E2E glob, so the current full E2E suite is intentionally non-green until the feature exists. Consult the test worker's accompanying RED report for the final rerun command, process cleanup, screenshot, and retained evidence paths. No broad suite was rerun by this reviewer.
