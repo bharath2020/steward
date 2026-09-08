@@ -1,0 +1,63 @@
+
+> steward@0.1.0 verify:installer
+> node scripts/verify-installer.mjs && node --import tsx --test tests/install.test.ts
+
+Installer publication contract passed: README and default follow main.
+TAP version 13
+# Subtest: archive installer needs no Git, forwards options, and preserves an existing installation
+ok 1 - archive installer needs no Git, forwards options, and preserves an existing installation
+  ---
+  duration_ms: 1061.775625
+  type: 'test'
+  ...
+# Subtest: archive installer refuses an unrelated destination
+ok 2 - archive installer refuses an unrelated destination
+  ---
+  duration_ms: 12.505042
+  type: 'test'
+  ...
+# Subtest: failed downloads leave no install directory or stale download lock
+ok 3 - failed downloads leave no install directory or stale download lock
+  ---
+  duration_ms: 174.127208
+  type: 'test'
+  ...
+# Subtest: public installer downloads main by default and honors an explicit commit
+ok 4 - public installer downloads main by default and honors an explicit commit
+  ---
+  duration_ms: 337.574584
+  type: 'test'
+  ...
+# Subtest: repeat install replaces source, removes obsolete source, and preserves local data
+ok 5 - repeat install replaces source, removes obsolete source, and preserves local data
+  ---
+  duration_ms: 1047.214875
+  type: 'test'
+  ...
+# Subtest: failed repeat download leaves installed source and saved data intact
+ok 6 - failed repeat download leaves installed source and saved data intact
+  ---
+  duration_ms: 242.228959
+  type: 'test'
+  ...
+# Subtest: repeat install supports legacy markers and refuses active setup locks
+ok 7 - repeat install supports legacy markers and refuses active setup locks
+  ---
+  duration_ms: 1095.048083
+  type: 'test'
+  ...
+# Subtest: update stops installed services but leaves another workspace's services alone
+ok 8 - update stops installed services but leaves another workspace's services alone
+  ---
+  duration_ms: 1227.224125
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5311.148417

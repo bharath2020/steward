@@ -1,0 +1,136 @@
+TAP version 13
+# Subtest: fresh installation includes the bundled version metadata
+ok 1 - fresh installation includes the bundled version metadata
+  ---
+  duration_ms: 71.972542
+  type: 'test'
+  ...
+# Subtest: update upgrades an older skill and retains its complete customized copy
+ok 2 - update upgrades an older skill and retains its complete customized copy
+  ---
+  duration_ms: 60.2795
+  type: 'test'
+  ...
+# Subtest: update installs when no prior skill exists
+ok 3 - update installs when no prior skill exists
+  ---
+  duration_ms: 58.716125
+  type: 'test'
+  ...
+# Subtest: update preserves customized same/newer version 2 without a backup
+ok 4 - update preserves customized same/newer version 2 without a backup
+  ---
+  duration_ms: 54.415875
+  type: 'test'
+  ...
+# Subtest: update preserves customized same/newer version 3 without a backup
+ok 5 - update preserves customized same/newer version 3 without a backup
+  ---
+  duration_ms: 56.155334
+  type: 'test'
+  ...
+# Subtest: recognized unversioned Steward skill upgrades and backs up local customizations
+ok 6 - recognized unversioned Steward skill upgrades and backs up local customizations
+  ---
+  duration_ms: 62.6585
+  type: 'test'
+  ...
+# Subtest: unknown unversioned directory stays untouched
+ok 7 - unknown unversioned directory stays untouched
+  ---
+  duration_ms: 54.989
+  type: 'test'
+  ...
+# Subtest: malformed installed metadata (invalid JSON) rejects without changing files
+ok 8 - malformed installed metadata (invalid JSON) rejects without changing files
+  ---
+  duration_ms: 57.53275
+  type: 'test'
+  ...
+# Subtest: malformed installed metadata (string version) rejects without changing files
+ok 9 - malformed installed metadata (string version) rejects without changing files
+  ---
+  duration_ms: 55.529208
+  type: 'test'
+  ...
+# Subtest: malformed installed metadata (zero version) rejects without changing files
+ok 10 - malformed installed metadata (zero version) rejects without changing files
+  ---
+  duration_ms: 57.940875
+  type: 'test'
+  ...
+# Subtest: malformed installed metadata (wrong name) rejects without changing files
+ok 11 - malformed installed metadata (wrong name) rejects without changing files
+  ---
+  duration_ms: 56.339333
+  type: 'test'
+  ...
+# Subtest: malformed installed metadata (unsafe version) rejects without changing files
+ok 12 - malformed installed metadata (unsafe version) rejects without changing files
+  ---
+  duration_ms: 56.435708
+  type: 'test'
+  ...
+# Subtest: malformed bundled metadata rejects before disturbing the installed skill
+ok 13 - malformed bundled metadata rejects before disturbing the installed skill
+  ---
+  duration_ms: 57.095708
+  type: 'test'
+  ...
+# Subtest: symlink destination rejects without touching the target
+ok 14 - symlink destination rejects without touching the target
+  ---
+  duration_ms: 55.569792
+  type: 'test'
+  ...
+# Subtest: repeat setup upgrades an older installed skill through the public bootstrap path
+ok 15 - repeat setup upgrades an older installed skill through the public bootstrap path
+  ---
+  duration_ms: 948.772
+  type: 'test'
+  ...
+# Subtest: publication failure restores the old skill and releases the installation lock
+ok 16 - publication failure restores the old skill and releases the installation lock
+  ---
+  duration_ms: 118.4655
+  type: 'test'
+  ...
+# Subtest: an existing installer lock refuses concurrent mutation and preserves its owner
+ok 17 - an existing installer lock refuses concurrent mutation and preserves its owner
+  ---
+  duration_ms: 53.99875
+  type: 'test'
+  ...
+# Subtest: bundled authoring examples load and validate their initial inputs offline
+ok 18 - bundled authoring examples load and validate their initial inputs offline
+  ---
+  duration_ms: 473.874875
+  type: 'test'
+  ...
+# Subtest: offline validation fails for missing inputs and invalid workflow paths
+ok 19 - offline validation fails for missing inputs and invalid workflow paths
+  ---
+  duration_ms: 275.789041
+  type: 'test'
+  ...
+# Subtest: portable installation includes references and examples and refuses an existing skill
+ok 20 - portable installation includes references and examples and refuses an existing skill
+  ---
+  duration_ms: 119.321
+  type: 'test'
+  ...
+# Subtest: standard setup installs the skill and repeat setup preserves a customized copy
+ok 21 - standard setup installs the skill and repeat setup preserves a customized copy
+  ---
+  duration_ms: 1442.099541
+  type: 'test'
+  ...
+1..21
+# tests 21
+# suites 0
+# pass 21
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2484.9935

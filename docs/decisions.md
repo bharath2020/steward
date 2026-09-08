@@ -26,6 +26,7 @@ This register records choices made for the production direction. It does not ass
 | ADR-018 | Portable V1 authoring skill and offline loader validation | Current authoring distribution |
 | ADR-019 | Composable executable scopes and bounded repeat | Early P4 language slice |
 | ADR-020 | Explicit provider session continuity within repeated scopes | Scope execution option |
+| ADR-021 | Version-aware authoring skill updates with retained backups | Installer behavior |
 
 ## ADR-018 — Portable V1 authoring skill
 
@@ -301,3 +302,14 @@ The first encounter or absence of a recorded session ID starts fresh and emits a
 **Consequences.** This refines ADR-019's iteration execution semantics and ADR-005's session-bound recovery without changing output acceptance, fan-in, permissions, or the default fresh behavior. Map positions are affinity identities; reordering data changes which item occupies that identity. Local provider session availability is required; this adds no cross-workspace or machine portability guarantee. Simulation or controlled adapter tests do not establish live provider reliability.
 
 **Evidence.** [Initial session-policy red evidence](validation/scope-sessions-red-2026-09-07.md) precedes implementation. Record adapter invocation, accepted session metadata, changed inputs, sibling/nested isolation, missing-ID fallback, recovery/restart, mismatches, and existing-history replay separately before claiming qualification.
+
+
+## ADR-021 — Version-aware authoring skill updates with retained backups
+
+**Context.** Reinstalling Steward updated source while ADR-018's `--if-missing` setup policy left installed authoring skills stale, hiding newly supported scopes and session options.
+
+**Decision.** Packaging/scripts own a bundled `skill-version.json` with exactly `name: "steward-workflow"` and a positive safe-integer `version`. Start at 1 and increment for future skill changes; this is separate from workflow language and npm versions. Setup (and therefore archive install) invokes `--update`. It installs missing skills, replaces lower versions, and preserves same/newer versions. A recognizable unversioned SKILL.md frontmatter name is legacy version 0, including customized copies. Unknown legacy directories remain untouched with an explicit message. Present malformed metadata fails closed. Plain install retains overwrite refusal and `--if-missing` remains install-only; those flags cannot be combined with `--update`.
+
+An installation lock serializes this skill's operations. Reject symlink/non-directory destinations. Copy and validate the incoming skill into a private staging directory first. Move an older entire directory to a unique hidden backup wrapper beside the destination, then publish the staged directory by rename. Retain and print the backup (including customizations). A caught publication failure restores the previous directory. Do not merge user edits into the new release or silently downgrade.
+
+**Consequences.** This supersedes ADR-018's repeat-setup preservation rule only for older recognizable skills. No dependencies, providers, credentials, execution authority or runtime data change. The rename publication is atomic, but swapping two directories is not a crash-atomic transaction: an interruption between renames may leave the old copy in the retained backup and the install lock in place. Operators confirm the installer stopped, restore the printed/adjacent backup when necessary, then remove the lock. Existing agent turns may retain loaded instructions; updated skills become available on a subsequent turn. Tests cover the executable setup path as well as helper behavior; this does not establish broader production distribution readiness.

@@ -1,0 +1,39 @@
+TAP version 13
+# Subtest: fresh installation includes the bundled version metadata
+ok 1 - fresh installation includes the bundled version metadata
+  ---
+  duration_ms: 71.75425
+  type: 'test'
+  ...
+# Subtest: update upgrades an older skill and retains its complete customized copy
+not ok 2 - update upgrades an older skill and retains its complete customized copy
+  ---
+  duration_ms: 54.256417
+  type: 'test'
+  location: '/Users/bharath2020/Documents/projects/steward/tests/skill-update.test.ts:7:3055'
+  failureType: 'testCodeFailure'
+  error: |-
+    Usage: npm run skill:install -- [--if-missing] [--agent codex|claude | --dest /path/to/skills]
+
+
+    1 !== 0
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/bharath2020/Documents/projects/steward/tests/skill-update.test.ts:67:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 1
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 270.07925

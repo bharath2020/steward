@@ -36,7 +36,7 @@ Select **Build** to describe a workflow to an installed, authenticated Codex or 
 
 ## Create YAML with your own agent
 
-The standard installer and `npm run setup` install the bundled [Steward workflow skill](skills/steward-workflow/SKILL.md) for Codex automatically. Set `STEWARD_SKILL_AGENT=claude`, `both`, or `none` in the setup/installer environment to select another target or opt out. Repeated setup preserves an existing skill, including local customizations, and prints how to refresh it. When using the piped installer, set the variable on `bash`, for example `curl -fsSL https://raw.githubusercontent.com/bharath2020/steward/main/install.sh | STEWARD_SKILL_AGENT=both bash`.
+The standard installer and `npm run setup` install the bundled [Steward workflow skill](skills/steward-workflow/SKILL.md) for Codex automatically. Set `STEWARD_SKILL_AGENT=claude`, `both`, or `none` in the setup/installer environment to select another target or opt out. Repeated setup upgrades older skills, retaining their complete previous directory as a backup; same/newer versions remain unchanged. When using the piped installer, set the variable on `bash`, for example `curl -fsSL https://raw.githubusercontent.com/bharath2020/steward/main/install.sh | STEWARD_SKILL_AGENT=both bash`.
 
 To install the skill separately from a Steward checkout or downloaded installation (Node.js 22+):
 
@@ -44,7 +44,11 @@ To install the skill separately from a Steward checkout or downloaded installati
 npm run skill:install
 ```
 
-This installs `steward-workflow` into `${CODEX_HOME:-~/.codex}/skills`. It is available on your next Codex turn. For Claude Code use `npm run skill:install -- --agent claude`; for another agent use `npm run skill:install -- --dest /absolute/path/to/skills`, or give the agent the bundled `SKILL.md` directly. Installation needs no runtime services or npm dependencies and refuses to overwrite an existing skill. Keep the whole skill directory so its references and examples remain available.
+This installs `steward-workflow` into `${CODEX_HOME:-~/.codex}/skills`. It is available on your next Codex turn. For Claude Code use `npm run skill:install -- --agent claude`; for another agent use `npm run skill:install -- --dest /absolute/path/to/skills`, or give the agent the bundled `SKILL.md` directly. Installation needs no runtime services or npm dependencies. Standalone installation refuses an existing skill unless you pass `--update`: `npm run skill:install -- --update`. Setup and the archive installer use this version-aware update automatically. Keep the whole skill directory so its references and examples remain available.
+
+`skill-version.json` carries a positive integer release version independent of YAML version 1; maintainers must increment it when changing the bundled skill. Updates replace older versions, preserving all previous files and customizations at `.steward-workflow-backup-<unique>/steward-workflow` beside the installed skill. Same/newer versions are preserved. Recognizable unversioned Steward skills count as version 0; unrelated unversioned directories are preserved with a message. Invalid version metadata stops installation. `--if-missing` retains its install-only behavior.
+
+To restore a backup, move the current skill aside and move the printed backup directory back to its original location. An interrupted update retains its backup and install lock; confirm the installer has stopped before restoring the backup or removing the lock.
 
 Ask your agent:
 
@@ -56,7 +60,7 @@ The skill covers the implemented V1 schema, human questions, loops, and array fa
 npm run validate:workflow -- /absolute/path/to/workflow.yaml /absolute/path/to/input.json
 ```
 
-Validation uses the same file-aware loader as runtime starts, checks supplied initial-input references, and does not start Temporal or an agent. It does not exhaustively check node-output references or nested object shapes. The schema guide calls out those manual checks. Installation and validation details are covered by [ADR-018](docs/decisions.md#adr-018--portable-v1-authoring-skill).
+Validation uses the same file-aware loader as runtime starts, checks supplied initial-input references, and does not start Temporal or an agent. It does not exhaustively check node-output references or nested object shapes. The schema guide calls out those manual checks. Installation and validation details are covered by [ADR-018](docs/decisions.md#adr-018--portable-v1-authoring-skill) and [ADR-021](docs/decisions.md#adr-021--version-aware-authoring-skill-updates-with-retained-backups).
 
 ## Product direction and design
 

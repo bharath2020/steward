@@ -53,12 +53,12 @@ if [ ! -f node_modules/.steward-setup ] || [ "$(cat node_modules/.steward-setup)
   printf '%s' "$fingerprint" > node_modules/.steward-setup
 fi
 npm run build
-# First setup installs the authoring skill; repeat setup preserves custom copies.
+# Install or upgrade older authoring skills, retaining the previous directory as a backup.
 case "${STEWARD_SKILL_AGENT:-codex}" in
-  codex|claude) node scripts/install-skill.mjs --if-missing --agent "${STEWARD_SKILL_AGENT:-codex}" ;;
+  codex|claude) node scripts/install-skill.mjs --update --agent "${STEWARD_SKILL_AGENT:-codex}" ;;
   both)
-    node scripts/install-skill.mjs --if-missing --agent codex
-    node scripts/install-skill.mjs --if-missing --agent claude
+    node scripts/install-skill.mjs --update --agent codex
+    node scripts/install-skill.mjs --update --agent claude
     ;;
   none) echo "Skipping authoring skill installation (STEWARD_SKILL_AGENT=none)." ;;
   *) echo "STEWARD_SKILL_AGENT must be codex, claude, both, or none." >&2; exit 1 ;;
